@@ -403,6 +403,8 @@ static void Dummystaff_OnChange(void);
 // CONSOLE VARIABLES AND THEIR POSSIBLE VALUES GO HERE.
 // ==========================================================================
 
+consvar_t cv_showfocuslost = {"showfocuslost", "Yes", CV_SAVE, CV_YesNo, NULL, 0, NULL, NULL, 0, 0, NULL };
+
 static CV_PossibleValue_t map_cons_t[] = {
 	{0,"MIN"},
 	{NUMMAPS, "MAX"},
@@ -442,7 +444,7 @@ static CV_PossibleValue_t serversort_cons_t[] = {
 	{1,"Modified State"},
 	{2,"Most Players"},
 	{3,"Least Players"},
-	{4,"Max Players"},
+	{4,"Max Player Slots"},
 	{5,"Gametype"},
 	{0,NULL}
 };
@@ -952,14 +954,15 @@ static menuitem_t MP_MainMenu[] =
 
 static menuitem_t MP_ServerMenu[] =
 {
-	{IT_STRING|IT_CVAR,              NULL, "Max. Player Count",     &cv_maxplayers,      10},
-	{IT_STRING|IT_CALL,              NULL, "Room...",               M_RoomMenu,          20},
-	{IT_STRING|IT_CVAR|IT_CV_STRING, NULL, "Server Name",           &cv_servername,      30},
+	{IT_STRING|IT_CVAR,                NULL, "Max. Player Count",     &cv_maxplayers,         0},
+	{IT_STRING|IT_CALL,                NULL, "Room...",               M_RoomMenu,            10},
+	{IT_STRING|IT_CVAR|IT_CV_STRING,   NULL, "Server Name",           &cv_servername,        20},
+	{IT_STRING|IT_CVAR|IT_CV_PASSWORD, NULL, "Password",              &cv_dummyjoinpassword, 44},
 
-	{IT_STRING|IT_CVAR,              NULL, "Game Type",             &cv_newgametype,     68},
-	{IT_STRING|IT_CVAR,              NULL, "Level",                 &cv_nextmap,         78},
+	{IT_STRING|IT_CVAR,                NULL, "Game Type",             &cv_newgametype,       68},
+	{IT_STRING|IT_CVAR,                NULL, "Level",                 &cv_nextmap,           78},
 
-	{IT_WHITESTRING|IT_CALL,         NULL, "Start",                 M_StartServer,      130},
+	{IT_WHITESTRING|IT_CALL,           NULL, "Start",                 M_StartServer,        130},
 };
 
 #endif
@@ -1255,7 +1258,7 @@ static menuitem_t OP_OpenGLOptionsMenu[] =
 	{IT_SUBMENU|IT_STRING,      NULL, "Fog...",          &OP_OpenGLFogDef,      10},
 	{IT_SUBMENU|IT_STRING,      NULL, "Gamma...",        &OP_OpenGLColorDef,    20},
 
-	{IT_STRING|IT_CVAR,         NULL, "Field of View",   &cv_grfov,             35},
+	{IT_STRING|IT_CVAR,         NULL, "Field of View",   &cv_fov,               35},
 	{IT_STRING|IT_CVAR,         NULL, "Quality",         &cv_scr_depth,         45},
 	{IT_STRING|IT_CVAR,         NULL, "Texture Filter",  &cv_grfiltermode,      55},
 	{IT_STRING|IT_CVAR,         NULL, "Anisotropic",     &cv_granisotropicmode, 65},
@@ -1322,6 +1325,9 @@ static menuitem_t OP_SoundOptionsMenu[] =
 	{IT_STRING|IT_CVAR,			NULL, "Powerup Warning",		&cv_kartinvinsfx,		 95},
 
 	{IT_KEYHANDLER|IT_STRING,	NULL, "Sound Test",				M_HandleSoundTest,		110},
+
+	{IT_STRING|IT_CVAR,        NULL, "Play Music While Unfocused", &cv_playmusicifunfocused, 125},
+	{IT_STRING|IT_CVAR,        NULL, "Play SFX While Unfocused", &cv_playsoundifunfocused, 135},
 };
 
 /*static menuitem_t OP_DataOptionsMenu[] =
@@ -1396,7 +1402,7 @@ static menuitem_t OP_HUDOptionsMenu[] =
 	{IT_STRING | IT_CVAR | IT_CV_SLIDER,
 	                      NULL, "HUD Visibility",			&cv_translucenthud,		 20},
 
-	{IT_STRING | IT_SUBMENU, NULL, "Online chat options...",&OP_ChatOptionsDef, 	 35},
+	{IT_STRING | IT_SUBMENU, NULL, "Online HUD options...",&OP_ChatOptionsDef, 	 35},
 	{IT_STRING | IT_CVAR, NULL, "Background Glass",			&cons_backcolor,		 45},
 
 	{IT_STRING | IT_CVAR | IT_CV_SLIDER,
@@ -1408,8 +1414,11 @@ static menuitem_t OP_HUDOptionsMenu[] =
 	// highlight info - (GOOD HIGHLIGHT, WARNING HIGHLIGHT) - 105 (see M_DrawHUDOptions)
 
 	{IT_STRING | IT_CVAR, NULL,	"Console Text Size",		&cv_constextsize,		120},
+
+	{IT_STRING | IT_CVAR, NULL,   "Show \"FOCUS LOST\"",  &cv_showfocuslost,   135},
 };
 
+// Ok it's still called chatoptions but we'll put ping display in here to be clean
 static menuitem_t OP_ChatOptionsMenu[] =
 {
 	// will ANYONE who doesn't know how to use the console want to touch this one?
@@ -1423,6 +1432,8 @@ static menuitem_t OP_ChatOptionsMenu[] =
 	{IT_STRING | IT_CVAR, NULL, "Chat Background Tint",		&cv_chatbacktint,		50},
 	{IT_STRING | IT_CVAR, NULL, "Message Fadeout Time",		&cv_chattime,			60},
 	{IT_STRING | IT_CVAR, NULL, "Spam Protection",			&cv_chatspamprotection,	70},
+
+	{IT_STRING | IT_CVAR, NULL, "Local ping display",		&cv_showping,			90},	// shows ping next to framerate if we want to.
 };
 
 static menuitem_t OP_GameOptionsMenu[] =
@@ -1475,15 +1486,16 @@ static menuitem_t OP_AdvServerOptionsMenu[] =
 
 	{IT_STRING | IT_CVAR,    NULL, "Attempts to resynchronise",		&cv_resynchattempts,	 40},
 	{IT_STRING | IT_CVAR,    NULL, "Ping limit (ms)",				&cv_maxping,			 50},
-	{IT_STRING | IT_CVAR,    NULL, "Connection timeout (tics)",		&cv_nettimeout,			 60},
-	{IT_STRING | IT_CVAR,    NULL, "Join timeout (tics)",			&cv_jointimeout,		 70},
+	{IT_STRING | IT_CVAR,    NULL, "Ping timeout (s)",				&cv_pingtimeout,		 60},
+	{IT_STRING | IT_CVAR,    NULL, "Connection timeout (tics)",		&cv_nettimeout,			 70},
+	{IT_STRING | IT_CVAR,    NULL, "Join timeout (tics)",			&cv_jointimeout,		 80},
 
-	{IT_STRING | IT_CVAR,    NULL, "Max. file transfer send (KB)",	&cv_maxsend,			 90},
-	{IT_STRING | IT_CVAR,    NULL, "File transfer packet rate",		&cv_downloadspeed,		100},
+	{IT_STRING | IT_CVAR,    NULL, "Max. file transfer send (KB)",	&cv_maxsend,			100},
+	{IT_STRING | IT_CVAR,    NULL, "File transfer packet rate",		&cv_downloadspeed,		110},
 
-	{IT_STRING | IT_CVAR,    NULL, "Log join addresses",			&cv_showjoinaddress,	120},
-	{IT_STRING | IT_CVAR,    NULL, "Log resyncs",					&cv_blamecfail,			130},
-	{IT_STRING | IT_CVAR,    NULL, "Log file transfers",			&cv_noticedownload,		140},
+	{IT_STRING | IT_CVAR,    NULL, "Log join addresses",			&cv_showjoinaddress,	130},
+	{IT_STRING | IT_CVAR,    NULL, "Log resyncs",					&cv_blamecfail,			140},
+	{IT_STRING | IT_CVAR,    NULL, "Log file transfers",			&cv_noticedownload,		150},
 };
 #endif
 
@@ -1836,7 +1848,6 @@ static menu_t SP_NightsGhostDef =
 	NULL
 };*/
 
-#ifndef NONET
 // Multiplayer
 menu_t MP_MainDef =
 {
@@ -1847,12 +1858,18 @@ menu_t MP_MainDef =
 	M_DrawMPMainMenu,
 	42, 30,
 	0,
-	M_CancelConnect
-};
-menu_t MP_ServerDef = MAPICONMENUSTYLE("M_MULTI", MP_ServerMenu, &MP_MainDef);
-#endif
-menu_t MP_OfflineServerDef = MAPICONMENUSTYLE("M_MULTI", MP_OfflineServerMenu, &MP_MainDef);
 #ifndef NONET
+	M_CancelConnect
+#else
+	NULL
+#endif
+};
+
+menu_t MP_OfflineServerDef = MAPICONMENUSTYLE("M_MULTI", MP_OfflineServerMenu, &MP_MainDef);
+
+#ifndef NONET
+menu_t MP_ServerDef = MAPICONMENUSTYLE("M_MULTI", MP_ServerMenu, &MP_MainDef);
+
 menu_t MP_ConnectDef =
 {
 	"M_MULTI",
@@ -2380,6 +2397,9 @@ static void M_NextOpt(void)
 {
 	INT16 oldItemOn = itemOn; // prevent infinite loop
 
+	if ((currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_PASSWORD)
+		((consvar_t *)currentMenu->menuitems[itemOn].itemaction)->value = 0;
+
 	do
 	{
 		if (itemOn + 1 > currentMenu->numitems - 1)
@@ -2392,6 +2412,9 @@ static void M_NextOpt(void)
 static void M_PrevOpt(void)
 {
 	INT16 oldItemOn = itemOn; // prevent infinite loop
+
+	if ((currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_PASSWORD)
+		((consvar_t *)currentMenu->menuitems[itemOn].itemaction)->value = 0;
 
 	do
 	{
@@ -2705,8 +2728,11 @@ boolean M_Responder(event_t *ev)
 	// BP: one of the more big hack i have never made
 	if (routine && (currentMenu->menuitems[itemOn].status & IT_TYPE) == IT_CVAR)
 	{
-		if ((currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_STRING)
+		if ((currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_STRING || (currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_PASSWORD)
 		{
+			if (ch == KEY_TAB && (currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_PASSWORD)
+				((consvar_t *)currentMenu->menuitems[itemOn].itemaction)->value ^= 1;
+
 			if (shiftdown && ch >= 32 && ch <= 127)
 				ch = shiftxform[ch];
 			if (M_ChangeStringCvar(ch))
@@ -2919,7 +2945,7 @@ void M_Drawer(void)
 	}
 
 	// focus lost notification goes on top of everything, even the former everything
-	if (window_notinfocus)
+	if (window_notinfocus && cv_showfocuslost.value)
 	{
 		M_DrawTextBox((BASEVIDWIDTH/2) - (60), (BASEVIDHEIGHT/2) - (16), 13, 2);
 		if (gamestate == GS_LEVEL && (P_AutoPause() || paused))
@@ -3492,7 +3518,7 @@ static void M_DrawMapEmblems(INT32 mapnum, INT32 x, INT32 y)
 
 		if (emblem->collected)
 			V_DrawSmallMappedPatch(x, y, 0, W_CachePatchName(M_GetEmblemPatch(emblem), PU_CACHE),
-			                       R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(emblem), GTC_CACHE));
+			                       R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(emblem), GTC_MENUCACHE));
 		else
 			V_DrawSmallScaledPatch(x, y, 0, W_CachePatchName("NEEDIT", PU_CACHE));
 
@@ -3592,6 +3618,8 @@ static void M_DrawGenericMenu(void)
 					case IT_CVAR:
 					{
 						consvar_t *cv = (consvar_t *)currentMenu->menuitems[i].itemaction;
+						char asterisks[MAXSTRINGLENGTH+1];
+						size_t sl;
 						switch (currentMenu->menuitems[i].status & IT_CVARTYPE)
 						{
 							case IT_CV_SLIDER:
@@ -3599,6 +3627,27 @@ static void M_DrawGenericMenu(void)
 							case IT_CV_NOPRINT: // color use this
 							case IT_CV_INVISSLIDER: // monitor toggles use this
 								break;
+							case IT_CV_PASSWORD:
+								if (i == itemOn)
+								{
+									V_DrawRightAlignedThinString(x + MAXSTRINGLENGTH*8 + 10, y, V_ALLOWLOWERCASE, va(M_GetText("Tab: %s password"), cv->value ? "hide" : "show"));
+								}
+
+								if (!cv->value || i != itemOn)
+								{
+									sl = strlen(cv->string);
+									memset(asterisks, '*', sl);
+									memset(asterisks + sl, 0, MAXSTRINGLENGTH+1-sl);
+
+									M_DrawTextBox(x, y + 4, MAXSTRINGLENGTH, 1);
+									V_DrawString(x + 8, y + 12, V_ALLOWLOWERCASE, asterisks);
+									if (skullAnimCounter < 4 && i == itemOn)
+										V_DrawCharacter(x + 8 + V_StringWidth(asterisks, 0), y + 12,
+											'_' | 0x80, false);
+									y += 16;
+									break;
+								}
+								/* fallthru */
 							case IT_CV_STRING:
 								M_DrawTextBox(x, y + 4, MAXSTRINGLENGTH, 1);
 								V_DrawString(x + 8, y + 12, V_ALLOWLOWERCASE, cv->string);
@@ -3806,7 +3855,7 @@ static void M_DrawPauseMenu(void)
 
 			if (emblem->collected)
 				V_DrawSmallMappedPatch(40, 44 + (i*8), 0, W_CachePatchName(M_GetEmblemPatch(emblem), PU_CACHE),
-				                       R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(emblem), GTC_CACHE));
+				                       R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(emblem), GTC_MENUCACHE));
 			else
 				V_DrawSmallScaledPatch(40, 44 + (i*8), 0, W_CachePatchName("NEEDIT", PU_CACHE));
 
@@ -5351,7 +5400,7 @@ static void M_DrawEmblemHints(void)
 		{
 			collected = recommendedflags;
 			V_DrawMappedPatch(12, 12+(28*j), 0, W_CachePatchName(M_GetEmblemPatch(emblem), PU_CACHE),
-				R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(emblem), GTC_CACHE));
+				R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(emblem), GTC_MENUCACHE));
 		}
 		else
 		{
@@ -5694,7 +5743,7 @@ static void M_DrawLoadGameData(void)
 		V_DrawScaledPatch(SP_LoadDef.x,144+8,0,W_CachePatchName(skins[savegameinfo[saveSlotSelected].skinnum].face, PU_CACHE));
 	else
 	{
-		UINT8 *colormap = R_GetTranslationColormap(savegameinfo[saveSlotSelected].skinnum, savegameinfo[saveSlotSelected].skincolor, 0);
+		UINT8 *colormap = R_GetTranslationColormap(savegameinfo[saveSlotSelected].skinnum, savegameinfo[saveSlotSelected].skincolor, GTC_MENUCACHE);
 		V_DrawMappedPatch(SP_LoadDef.x,144+8,0,W_CachePatchName(skins[savegameinfo[saveSlotSelected].skinnum].face, PU_CACHE), colormap);
 	}
 
@@ -6384,7 +6433,7 @@ static void M_DrawStatsMaps(int location)
 
 			if (exemblem->collected)
 				V_DrawSmallMappedPatch(295, y, 0, W_CachePatchName(M_GetExtraEmblemPatch(exemblem), PU_CACHE),
-				                       R_GetTranslationColormap(TC_DEFAULT, M_GetExtraEmblemColor(exemblem), GTC_CACHE));
+				                       R_GetTranslationColormap(TC_DEFAULT, M_GetExtraEmblemColor(exemblem), GTC_MENUCACHE));
 			else
 				V_DrawSmallScaledPatch(295, y, 0, W_CachePatchName("NEEDIT", PU_CACHE));
 
@@ -6519,7 +6568,7 @@ void M_DrawTimeAttackMenu(void)
 	// Character face!
 	if (W_CheckNumForName(skins[cv_chooseskin.value-1].facewant) != LUMPERROR)
 	{
-		UINT8 *colormap = R_GetTranslationColormap(cv_chooseskin.value-1, cv_playercolor.value, 0);
+		UINT8 *colormap = R_GetTranslationColormap(cv_chooseskin.value-1, cv_playercolor.value, GTC_MENUCACHE);
 		V_DrawMappedPatch(BASEVIDWIDTH-x - SHORT(facewantprefix[cv_chooseskin.value-1]->width), y, 0, facewantprefix[cv_chooseskin.value-1], colormap);
 	}
 
@@ -6644,7 +6693,7 @@ void M_DrawTimeAttackMenu(void)
 
 			if (em->collected)
 				V_DrawMappedPatch(BASEVIDWIDTH - 64 - 24, y+48, 0, W_CachePatchName(M_GetEmblemPatch(em), PU_CACHE),
-				                       R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(em), GTC_CACHE));
+				                       R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(em), GTC_MENUCACHE));
 			else
 				V_DrawScaledPatch(BASEVIDWIDTH - 64 - 24, y+48, 0, W_CachePatchName("NEEDIT", PU_CACHE));
 
@@ -6804,7 +6853,7 @@ static boolean M_QuitTimeAttackMenu(void)
 
 					if (em->collected)
 						V_DrawSmallMappedPatch(160+88, yHeight, 0, W_CachePatchName(M_GetEmblemPatch(em), PU_CACHE),
-																	 R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(em), GTC_CACHE));
+																	 R_GetTranslationColormap(TC_DEFAULT, M_GetEmblemColor(em), GTC_MENUCACHE));
 					else
 						V_DrawSmallScaledPatch(160+88, yHeight, 0, W_CachePatchName("NEEDIT", PU_CACHE));
 
@@ -7273,6 +7322,7 @@ static void M_DrawConnectMenu(void)
 {
 	UINT16 i, j;
 	const char *gt = "Unknown";
+	const char *spd = "";
 	INT32 numPages = (serverlistcount+(SERVERS_PER_PAGE-1))/SERVERS_PER_PAGE;
 
 	for (i = FIRSTSERVERLINE; i < min(localservercount, SERVERS_PER_PAGE)+FIRSTSERVERLINE; i++)
@@ -7326,7 +7376,17 @@ static void M_DrawConnectMenu(void)
 		V_DrawSmallString(currentMenu->x+46,S_LINEY(i)+8, globalflags,
 		                         va("Players: %02d/%02d", serverlist[slindex].info.numberofplayer, serverlist[slindex].info.maxplayer));
 
-		V_DrawSmallString(currentMenu->x+112, S_LINEY(i)+8, globalflags, va("Gametype: %s", gt));
+		V_DrawSmallString(currentMenu->x+112, S_LINEY(i)+8, globalflags, gt);
+
+		if (serverlist[slindex].info.gametype == GT_RACE)
+		{
+			spd = kartspeed_cons_t[serverlist[slindex].info.kartvars & SV_SPEEDMASK].strvalue;
+
+			V_DrawSmallString(currentMenu->x+132, S_LINEY(i)+8, globalflags, va("(%s Speed)", spd));
+		}
+
+		if (serverlist[slindex].info.kartvars & SV_PASSWORD)
+			V_DrawFixedPatch((currentMenu->x - 9) << FRACBITS, (S_LINEY(i)) << FRACBITS, FRACUNIT, globalflags & (~V_ALLOWLOWERCASE), W_CachePatchName("SERVLOCK", PU_CACHE), NULL);
 
 		MP_ConnectMenu[i+FIRSTSERVERLINE].status = IT_STRING | IT_CALL;
 	}
@@ -7560,6 +7620,11 @@ static void M_StartServer(INT32 choice)
 
 	// Still need to reset devmode
 	cv_debug = 0;
+
+	if (strlen(cv_dummyjoinpassword.string) > 0)
+		D_SetJoinPassword(cv_dummyjoinpassword.string);
+	else
+		joinpasswordset = false;
 
 	if (demoplayback)
 		G_StopDemo();
@@ -7862,7 +7927,7 @@ Update the maxplayers label...
 			if (!trans && i > cv_splitplayers.value)
 				trans = V_TRANSLUCENT;
 
-			colmap = R_GetTranslationColormap(pskin, pcol, 0);
+			colmap = R_GetTranslationColormap(pskin, pcol, GTC_MENUCACHE);
 
 			V_DrawFixedPatch(x<<FRACBITS, y<<FRACBITS, FRACUNIT, trans, facewantprefix[pskin], colmap);
 
@@ -8179,7 +8244,7 @@ static void M_DrawSetupMultiPlayerMenu(void)
 
 	statdot = W_CachePatchName("K_SDOT2", PU_CACHE); // coloured center
 	if (setupm_fakecolor)
-		V_DrawFixedPatch(((BASEVIDWIDTH - mx - 80) + ((speed-1)*8))<<FRACBITS, ((my+76) + ((weight-1)*8))<<FRACBITS, FRACUNIT, 0, statdot, R_GetTranslationColormap(0, setupm_fakecolor, 0));
+		V_DrawFixedPatch(((BASEVIDWIDTH - mx - 80) + ((speed-1)*8))<<FRACBITS, ((my+76) + ((weight-1)*8))<<FRACBITS, FRACUNIT, 0, statdot, R_GetTranslationColormap(0, setupm_fakecolor, GTC_MENUCACHE));
 
 	// 2.2 color bar backported with permission
 #define charw 72
@@ -8249,7 +8314,7 @@ static void M_DrawSetupMultiPlayerMenu(void)
 				offx = 8;
 				offy = 8;
 			}
-			colmap =  R_GetTranslationColormap(col, setupm_fakecolor, 0);
+			colmap =  R_GetTranslationColormap(col, setupm_fakecolor, GTC_MENUCACHE);
 			V_DrawFixedPatch((x+offx)<<FRACBITS, (my+28+offy)<<FRACBITS, FRACUNIT, 0, face, colmap);
 			if (scale == FRACUNIT) // bit of a hack
 				V_DrawFixedPatch((x+offx)<<FRACBITS, (my+28+offy)<<FRACBITS, FRACUNIT, 0, cursor, colmap);
@@ -8295,7 +8360,7 @@ static void M_DrawSetupMultiPlayerMenu(void)
 	// draw player sprite
 	if (setupm_fakecolor) // inverse should never happen
 	{
-		UINT8 *colormap = R_GetTranslationColormap(setupm_fakeskin, setupm_fakecolor, 0);
+		UINT8 *colormap = R_GetTranslationColormap(setupm_fakeskin, setupm_fakecolor, GTC_MENUCACHE);
 
 		if (skins[setupm_fakeskin].flags & SF_HIRES)
 		{
@@ -8306,8 +8371,6 @@ static void M_DrawSetupMultiPlayerMenu(void)
 		}
 		else
 			V_DrawMappedPatch(mx+43, my+131, flags, patch, colormap);
-
-		Z_Free(colormap);
 	}
 #undef charw
 }
