@@ -173,12 +173,15 @@ boolean P_CanAutoPause(void)
 
 //
 // P_AutoPause
-// Returns true when gameplay *should be* halted even if the game isn't necessarily paused.
+// Returns true when gameplay should be halted even if the game isn't necessarily paused.
 //
 boolean P_AutoPause(void)
 {
 	// Don't pause even on menu-up or focus-lost in netgames or record attack
-	return P_CanAutoPause() && (menuactive || window_notinfocus);
+	if (netgame || modeattacking)
+		return false;
+
+	return (menuactive || ( window_notinfocus && cv_pauseifunfocused.value ));
 }
 
 //
