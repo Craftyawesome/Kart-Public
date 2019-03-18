@@ -750,7 +750,7 @@ boolean preparefilemenu(boolean samedepth)
 					(dent->d_name[1]=='.' &&
 						dent->d_name[2]=='\0')))
 			continue; // we don't want to scan uptree
-
+	
 		strcpy(&menupath[menupathindex[menudepthleft]],dent->d_name);
 
 		if (stat(menupath,&fsstat) < 0) // do we want to follow symlinks? if not: change it to lstat
@@ -800,7 +800,14 @@ boolean preparefilemenu(boolean samedepth)
 		I_Error("preparefilemenu(): could not reallocate coredirmenu.");
 	}
 
-	rewinddir(dirhandle);
+	// heyjoeway: rewinddir causes issues on Nintendo Switch
+	// This code >>should<< be equivalent, if a bit less efficient
+	closedir(dirhandle);
+	if (!(dirhandle = opendir(menupath))) // get directory
+	{
+		closefilemenu(true);
+		return false;
+	}
 
 	while ((pos+folderpos) < sizecoredirmenu)
 	{
@@ -891,7 +898,7 @@ boolean preparefilemenu(boolean samedepth)
 	if ((menudepthleft != menudepth-1) // now for UP... entry
 		&& !(coredirmenu[0] = Z_StrDup(va("%c\5UP...", EXT_UP))))
 			I_Error("preparefilemenu(): could not create \"UP...\".");
-
+		
 	menupath[menupathindex[menudepthleft]] = 0;
 	sizecoredirmenu = (numfolders+pos); // just in case things shrink between opening and rewind
 

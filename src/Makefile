@@ -21,6 +21,7 @@
 #     Compile the SDL/Solaris version with 'make SOLARIS=1'
 #     Compile the SDL/FreeBSD version with 'gmake FREEBSD=1'
 #     Compile the SDL/Cygwin version with 'make CYGWIN32=1'
+#     Compile the SDL/Switch version with 'make SWITCH=1'
 #     Compile the SDL/other version try with 'make SDL=1'
 #
 # 'Targets':
@@ -179,6 +180,14 @@ endif
 ifdef PS3N
 NONX86=1
 NOHW=1
+endif
+
+ifdef SWITCH
+NOOBJDUMP=1
+NOASM=1
+NONX86=1
+NOHW=1
+OBJS+=$(OBJDIR)/switch/swkbd.o
 endif
 
 ifdef DJGPPDOS
@@ -455,6 +464,10 @@ endif
 
 ifdef DEVELOP
 	CPPFLAGS+=-DDEVELOP
+endif
+
+ifdef ENABLE_NXLINK
+	CPPFLAGS+=-DENABLE_NXLINK
 endif
 
 OPTS+=$(CPPFLAGS)

@@ -80,6 +80,10 @@ int	snprintf(char *str, size_t n, const char *fmt, ...);
 //int	vsnprintf(char *str, size_t n, const char *fmt, va_list ap);
 #endif
 
+#ifdef __SWITCH__
+#include "switch/swkbd.h"
+#endif
+
 #define SKULLXOFF -32
 #define LINEHEIGHT 16
 #define STRINGHEIGHT 8
@@ -1198,7 +1202,7 @@ static menuitem_t OP_Mouse2OptionsMenu[] =
 static menuitem_t OP_VideoOptionsMenu[] =
 {
 	{IT_STRING | IT_CALL,	NULL,	"Set Resolution...",	M_VideoModeMenu,		 10},
-#if (defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON) || defined (HAVE_SDL)
+#if ((defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON) || defined (HAVE_SDL)) && !defined(__SWITCH__)
 	{IT_STRING|IT_CVAR,		NULL,	"Fullscreen",			&cv_fullscreen,			 20},
 #endif
 	{IT_STRING | IT_CVAR | IT_CV_SLIDER,
@@ -1211,7 +1215,9 @@ static menuitem_t OP_VideoOptionsMenu[] =
 	{IT_STRING | IT_CVAR,	NULL,	"Skyboxes",				&cv_skybox,				 65},
 
 	{IT_STRING | IT_CVAR,	NULL,	"Show FPS",				&cv_ticrate,			 80},
+	#ifndef __SWITCH__
 	{IT_STRING | IT_CVAR,	NULL,	"Vertical Sync",		&cv_vidwait,			 90},
+	#endif
 
 #ifdef HWRENDER
 	{IT_STRING | IT_CVAR,	NULL,	"3D models",            &cv_grmd2,              105},
@@ -2464,6 +2470,32 @@ boolean M_Responder(event_t *ev)
 			case KEY_HAT1 + 3:
 				ch = KEY_RIGHTARROW;
 				break;
+			#ifdef __SWITCH__
+				// FIXME
+				case KEY_JOY1 + 1: // B
+					ch = KEY_ENTER;
+					break;
+				case KEY_JOY1 + 2: // X
+					ch = KEY_BACKSPACE;
+					break;
+				case KEY_JOY1 + 11: // Minus
+					ch = KEY_ESCAPE;
+					break;
+
+				// "D-pad"
+				case KEY_JOY1 + 13:
+					ch = KEY_UPARROW;
+					break;
+				case KEY_JOY1 + 15:
+					ch = KEY_DOWNARROW;
+					break;
+				case KEY_JOY1 + 12:
+					ch = KEY_LEFTARROW;
+					break;
+				case KEY_JOY1 + 14:
+					ch = KEY_RIGHTARROW;
+					break;
+			#endif
 		}
 	}
 	else if (menuactive)
@@ -2732,6 +2764,18 @@ boolean M_Responder(event_t *ev)
 		case KEY_ENTER:
 			noFurtherInput = true;
 			currentMenu->lastOn = itemOn;
+
+			#ifdef __SWITCH__
+			if ((currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_STRING) {
+				Switch_Keyboard_GetText(
+					currentMenu->menuitems[itemOn].text,
+					((consvar_t *)currentMenu->menuitems[itemOn].itemaction)->string // Current value of cvar
+				);
+				if (strlen(swkbdResult) == 0) return true;
+				CV_Set(currentMenu->menuitems[itemOn].itemaction, swkbdResult);
+			}
+			#endif
+
 			if (routine)
 			{
 				if (((currentMenu->menuitems[itemOn].status & IT_TYPE)==IT_CALL
@@ -4532,7 +4576,7 @@ static void M_AddonsClearName(INT32 choice)
 {
 	if (!majormods || prevmajormods)
 	{
-		CLEARNAME;
+		if (refreshdirname) { CLEARNAME; } // BRACES ARE REQUIRED BECAUSE OF MACRO FUCKERY
 	}
 	M_StopMessage(choice);
 }
@@ -4543,10 +4587,7 @@ static boolean M_AddonsRefresh(void)
 	if ((refreshdirmenu & REFRESHDIR_NORMAL) && !preparefilemenu(true))
 	{
 		UNEXIST;
-		if (refreshdirname)
-		{
-			CLEARNAME;
-		}
+		if (refreshdirname) { CLEARNAME; } // BRACES ARE REQUIRED BECAUSE OF MACRO FUCKERY
 		return true;
 	}
 
@@ -4584,7 +4625,7 @@ static boolean M_AddonsRefresh(void)
 		}
 
 		S_StartSound(NULL, sfx_s221);
-		CLEARNAME;
+		if (refreshdirname) { CLEARNAME; } // BRACES ARE REQUIRED BECAUSE OF MACRO FUCKERY
 	}
 
 	return false;
@@ -7964,6 +8005,12 @@ static void M_HandleConnectIP(INT32 choice)
 			break;
 
 		case KEY_ENTER:
+			#ifdef __SWITCH__
+			Switch_Keyboard_GetText("IPV4 Address", setupm_ip);
+			if (strlen(swkbdResult) == 0) break;
+			SDL_strlcpy(setupm_ip, swkbdResult, sizeof(setupm_ip));
+			#endif
+
 			S_StartSound(NULL,sfx_menu1); // Tails
 			currentMenu->lastOn = itemOn;
 			M_ConnectIP(1);
@@ -8352,6 +8399,14 @@ static void M_HandleSetupMultiPlayer(INT32 choice)
 				setupm_name[l+1] =0;
 			}
 			break;
+		#ifdef __SWITCH__
+		case KEY_ENTER:
+			if (itemOn != 0) break;
+			Switch_Keyboard_GetText("Player Name", setupm_name);
+			if (strlen(swkbdResult) == 0) break;
+	        SDL_strlcpy(setupm_name, swkbdResult, sizeof(setupm_name));
+			break;
+		#endif
 	}
 
 	// check skin

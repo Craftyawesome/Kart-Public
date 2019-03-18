@@ -2,6 +2,8 @@
 
 [SRB2Kart](https://srb2.org/mods/) is a kart racing mod based on the 3D Sonic the Hedgehog fangame [Sonic Robo Blast 2](https://srb2.org/), based on a modified version of [Doom Legacy](http://doomlegacy.sourceforge.net/).
 
+This fork aims to support the Nintendo Switch.
+
 ## Dependencies
 - NASM (x86 builds only)
 - SDL2 (Linux/OS X only)
@@ -13,5 +15,9 @@
 
 See [SRB2 Wiki/Source code compiling](http://wiki.srb2.org/wiki/Source_code_compiling). The compiling process for SRB2Kart is largely identical to SRB2.
 
+Switch-specific instructions will be available Soon(TM).
+
 ## Disclaimer
 Kart Krew is in no way affiliated with SEGA or Sonic Team. We do not claim ownership of any of SEGA's intellectual property used in SRB2.
+
+I (heyjoeway), STJr, Kart Krex, or the SRB2MB are in no way responsible if this port somehow manages to break your Switch.
