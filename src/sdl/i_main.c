@@ -46,6 +46,7 @@
 #include <sys/errno.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include "../switch/swkbd.h"
 #endif
 
 #ifdef SDLMAIN
@@ -155,6 +156,7 @@ extern void userAppInit()
 	// heyjoeway: Allows loading in the background
 	// This is eventually turned off by D_SRB2Loop
 	appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
+	Switch_Keyboard_Init();
 
 	#ifdef ENABLE_NXLINK
 	initNxLink();

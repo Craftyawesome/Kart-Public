@@ -37,6 +37,7 @@ int	snprintf(char *str, size_t n, const char *fmt, ...);
 
 #ifdef __SWITCH__
 #include <switch.h>
+#include "switch/swkbd.h"
 #endif
 
 
@@ -759,7 +760,8 @@ void D_SRB2Loop(void)
 #endif
 
 #ifdef __SWITCH__
-	// FIXME
+	Switch_Keyboard_Update();
+
 	if(!appletMainLoop()) {
 		I_Quit();
 		M_QuitResponse('y');

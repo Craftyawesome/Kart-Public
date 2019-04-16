@@ -57,6 +57,10 @@
 #include "SDL_syswm.h"
 #endif
 
+#ifdef __SWITCH__
+#include "../switch/swkbd.h"
+#endif
+
 #include "../doomstat.h"
 #include "../i_system.h"
 #include "../v_video.h"
@@ -1316,6 +1320,12 @@ void I_StartupMouse(void)
 //
 void I_OsPolling(void)
 {
+	#ifdef __SWITCH__
+		// Disable input if software keyboard is up
+		if (switch_kbdstate == SwkbdState_TextAvailable)
+			return;
+	#endif
+
 	if (consolevent)
 		I_GetConsoleEvents();
 	if (SDL_WasInit(SDL_INIT_JOYSTICK) == SDL_INIT_JOYSTICK)

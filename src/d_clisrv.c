@@ -2210,6 +2210,12 @@ boolean CL_Responder(event_t *ev)
 	// Only ESC and non-keyboard keys abort connection
 	if (ch == KEY_ESCAPE || ch >= KEY_MOUSE1)
 	{
+		#ifdef __SWITCH__
+			// Since Plus is the accept button for the Switch software keyboard, accepting will immediately cancel the connection.
+			// Therefore, ignore this specific button.
+			if (ch == KEY_JOY1+10) return false;
+		#endif
+
 		CONS_Printf(M_GetText("Network game synchronization aborted.\n"));
 		//M_StartMessage(M_GetText("Network game synchronization aborted.\n\nPress ESC\n"), NULL, MM_NOTHING);
 		D_QuitNetGame();

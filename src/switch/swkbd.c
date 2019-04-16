@@ -5,56 +5,44 @@
 
 #include "swkbd.h"
 #include <switch/applets/swkbd.h>
-#include <switch/services/hid.h>
 
-// Empty strings are invalid.
-SwkbdTextCheckResult Switch_Keyboard_ValidateText(char *string, size_t size) {
-	if (strcmp(string, "") == 0) {
-		strncpy(string, "The name cannot be empty.", size); 
-		return SwkbdTextCheckResult_Bad;
-	}
+SwkbdInline switch_kbdinline;
+SwkbdAppearArg switch_appearArg;
+Result switch_kdbresult;
+SwkbdState switch_kbdstate;
 
-	return SwkbdTextCheckResult_OK;
+void Switch_Keyboard_Init() {
+	Result rc=0;
+	rc = swkbdInlineCreate(&switch_kbdinline);
+	// Launch the applet.
+
+	switch_kbdinline.calcArg.initArg.mode = SwkbdInlineMode_AppletDisplay;
+
+	if (R_SUCCEEDED(rc))
+		rc = swkbdInlineLaunch(&switch_kbdinline);
+
+	swkbdInlineMakeAppearArg(&switch_appearArg, SwkbdType_Normal);
+	// You can optionally set switch_appearArg text / fields here.
+	swkbdInlineAppearArgSetOkButtonText(&switch_appearArg, "Submit");
+	switch_appearArg.dicFlag = 0;
+	switch_appearArg.returnButtonFlag = 0;
+
+	swkbdInlineSetKeytopBgAlpha(&switch_kbdinline, 0.75); // Make it transparent
+
+	switch_swkbdIsInit = true;
 }
 
-void Switch_Keyboard_GetText(const char *guide_text, const char *initial_text) {
-	// Check if this enter press is coming from an actual keyboard
-	if (hidKeyboardHeld(KBD_ENTER)) {
-		swkbdResult = strdup(initial_text);
-		return;
-	}
+void Switch_Keyboard_Update() {
+	switch_kdbresult = swkbdInlineUpdate(&switch_kbdinline, &switch_kbdstate); // Handles updating SwkbdInline state, this should be called periodically.
+	if (R_FAILED(switch_kdbresult)) // Swkbd applet sometimes gets closed when multitasking
+		Switch_Keyboard_Init(); 
+}
 
-	// Can't bring up the software keyboard when you can't pause the game
-	if (!P_CanAutoPause()) {
-		S_StartSound(NULL, sfx_s26d); // Error sound
-		swkbdResult = "";
-		return;
-	}
+void Switch_Keyboard_Open() {
+	swkbdInlineSetAlphaEnabledInInputMode(&switch_kbdinline, false);
+	swkbdInlineAppear(&switch_kbdinline, &switch_appearArg);
+}
 
-	Result ret = 0;
-	SwkbdConfig swkbd;
-	static char input_string[256];
-
-	if (R_FAILED(ret = swkbdCreate(&swkbd, 0))) {
-		swkbdClose(&swkbd);
-		swkbdResult = "";
-	}
-
-	swkbdConfigMakePresetDefault(&swkbd);
-
-	if (strlen(guide_text) != 0)
-		swkbdConfigSetGuideText(&swkbd, guide_text);
-
-	if (strlen(initial_text) != 0)
-		swkbdConfigSetInitialText(&swkbd, initial_text);
-
-	swkbdConfigSetTextCheckCallback(&swkbd, Switch_Keyboard_ValidateText);
-
-	if (R_FAILED(ret = swkbdShow(&swkbd, input_string, sizeof(input_string)))) {
-		swkbdClose(&swkbd);
-		swkbdResult = "";
-	}
-
-	swkbdClose(&swkbd);
-	swkbdResult = input_string;
+void Switch_Keyboard_Close() {
+	swkbdInlineDisappear(&switch_kbdinline);
 }

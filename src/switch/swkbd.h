@@ -3,12 +3,14 @@
 
 #include <switch/applets/swkbd.h>
 
-// Borrowed from https://github.com/joel16/NX-Shell/ (/source/keyboard.c)
+SwkbdInline switch_kbdinline;
+SwkbdAppearArg switch_appearArg;
+Result switch_kdbresult;
+SwkbdState switch_kbdstate;
 
-char *swkbdResult;
-
-// Empty strings are invalid.
-SwkbdTextCheckResult Switch_Keyboard_ValidateText(char *string, size_t size);
-void Switch_Keyboard_GetText(const char *guide_text, const char *initial_text);
+void Switch_Keyboard_Init();
+void Switch_Keyboard_Update();
+void Switch_Keyboard_Open();
+void Switch_Keyboard_Close();
 
 #endif

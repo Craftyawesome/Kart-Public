@@ -1090,117 +1090,118 @@ static boolean HU_clearChatSpaces(void)
 	return nothingbutspaces;
 }
 
+static void CHAT_Send() {
+	INT32 c;
+	char buf[2+256];
+	char *msg = &buf[2];
+	size_t i;
+	size_t ci = 2;
+	INT32 target = 0;
+
+	if (HU_clearChatSpaces()) // Avoids being able to send empty messages, or something.
+		return; // If this returns true, that means our message was NOTHING but spaces, so don't send it period.
+
+	do {
+		c = w_chat[-2+ci++];
+		if (!c || (c >= ' ' && !(c & 0x80))) // copy printable characters and terminating '\0' only.
+			buf[ci-1]=c;
+	} while (c);
+	i = 0;
+	for (;(i<HU_MAXMSGLEN);i++)
+		w_chat[i] = 0;	// reset this.
+
+	c_input = 0;
+
+	for (;(i<HU_MAXMSGLEN);i++)
+		w_chat[i] = 0; // reset this.
+
+	c_input = 0;
+
+	// last minute mute check
+	if (CHAT_MUTE)
+	{
+		HU_AddChatText(va("%s>ERROR: The chat is muted. You can't say anything.", "\x85"), false);
+		return;
+	}
+
+	if (strlen(msg) > 4 && strnicmp(msg, "/pm", 3) == 0) // used /pm
+	{
+		INT32 spc = 1; // used if nodenum[1] is a space.
+		char *nodenum = (char*) malloc(3);
+		const char *newmsg;
+
+		// what we're gonna do now is check if the node exists
+		// with that logic, characters 4 and 5 are our numbers:
+
+		// teamtalk can't send PMs, just don't send it, else everyone would be able to see it, and no one wants to see your sex RP sicko.
+		if (teamtalk)
+		{
+			HU_AddChatText(va("%sCannot send sayto in Say-Team.", "\x85"), false);
+			return;
+		}
+
+		strncpy(nodenum, msg+3, 3);
+
+		// check for undesirable characters in our "number"
+		if 	(((nodenum[0] < '0') || (nodenum[0] > '9')) || ((nodenum[1] < '0') || (nodenum[1] > '9')))
+		{
+			// check if nodenum[1] is a space
+			if (nodenum[1] == ' ')
+				spc = 0;
+				// let it slide
+			else
+			{
+				HU_AddChatText("\x82NOTICE: \x80Invalid command format. Correct format is \'/pm<node> \'.", false);
+				free(nodenum);
+				return;
+			}
+		}
+		// I'm very bad at C, I swear I am, additional checks eww!
+		if (spc != 0)
+		{
+			if (msg[5] != ' ')
+			{
+				HU_AddChatText("\x82NOTICE: \x80Invalid command format. Correct format is \'/pm<node> \'.", false);
+				free(nodenum);
+				return;
+			}
+		}
+
+		target = atoi((const char*) nodenum); // turn that into a number
+		free(nodenum);
+		//CONS_Printf("%d\n", target);
+
+		// check for target player, if it doesn't exist then we can't send the message!
+		if (target < MAXPLAYERS && playeringame[target]) // player exists
+			target++; // even though playernums are from 0 to 31, target is 1 to 32, so up that by 1 to have it work!
+		else
+		{
+			HU_AddChatText(va("\x82NOTICE: \x80Player %d does not exist.", target), false); // same
+			return;
+		}
+
+		// we need to get rid of the /pm<node>
+		newmsg = msg+5+spc;
+		strlcpy(msg, newmsg, 255);
+	}
+	if (ci > 3) // don't send target+flags+empty message.
+	{
+		if (teamtalk)
+			buf[0] = -1; // target
+		else
+			buf[0] = target;
+
+		buf[1] = 0; // flags
+		SendNetXCmd(XD_SAY, buf, 2 + strlen(&buf[2]) + 1);
+	}
+}
+
 //
 //
 static void HU_queueChatChar(INT32 c)
 {
 	// send automaticly the message (no more chat char)
-	if (c == KEY_ENTER)
-	{
-		char buf[2+256];
-		char *msg = &buf[2];
-		size_t i;
-		size_t ci = 2;
-		INT32 target = 0;
-
-		if (HU_clearChatSpaces()) // Avoids being able to send empty messages, or something.
-			return; // If this returns true, that means our message was NOTHING but spaces, so don't send it period.
-
-		do {
-			c = w_chat[-2+ci++];
-			if (!c || (c >= ' ' && !(c & 0x80))) // copy printable characters and terminating '\0' only.
-				buf[ci-1]=c;
-		} while (c);
-		i = 0;
-		for (;(i<HU_MAXMSGLEN);i++)
-			w_chat[i] = 0;	// reset this.
-
-		c_input = 0;
-
-		for (;(i<HU_MAXMSGLEN);i++)
-			w_chat[i] = 0; // reset this.
-
-		c_input = 0;
-
-		// last minute mute check
-		if (CHAT_MUTE)
-		{
-			HU_AddChatText(va("%s>ERROR: The chat is muted. You can't say anything.", "\x85"), false);
-			return;
-		}
-
-		if (strlen(msg) > 4 && strnicmp(msg, "/pm", 3) == 0) // used /pm
-		{
-			INT32 spc = 1; // used if nodenum[1] is a space.
-			char *nodenum = (char*) malloc(3);
-			const char *newmsg;
-
-			// what we're gonna do now is check if the node exists
-			// with that logic, characters 4 and 5 are our numbers:
-
-			// teamtalk can't send PMs, just don't send it, else everyone would be able to see it, and no one wants to see your sex RP sicko.
-			if (teamtalk)
-			{
-				HU_AddChatText(va("%sCannot send sayto in Say-Team.", "\x85"), false);
-				return;
-			}
-
-			strncpy(nodenum, msg+3, 3);
-
-			// check for undesirable characters in our "number"
-			if 	(((nodenum[0] < '0') || (nodenum[0] > '9')) || ((nodenum[1] < '0') || (nodenum[1] > '9')))
-			{
-				// check if nodenum[1] is a space
-				if (nodenum[1] == ' ')
-					spc = 0;
-					// let it slide
-				else
-				{
-					HU_AddChatText("\x82NOTICE: \x80Invalid command format. Correct format is \'/pm<node> \'.", false);
-					free(nodenum);
-					return;
-				}
-			}
-			// I'm very bad at C, I swear I am, additional checks eww!
-			if (spc != 0)
-			{
-				if (msg[5] != ' ')
-				{
-					HU_AddChatText("\x82NOTICE: \x80Invalid command format. Correct format is \'/pm<node> \'.", false);
-					free(nodenum);
-					return;
-				}
-			}
-
-			target = atoi((const char*) nodenum); // turn that into a number
-			free(nodenum);
-			//CONS_Printf("%d\n", target);
-
-			// check for target player, if it doesn't exist then we can't send the message!
-			if (target < MAXPLAYERS && playeringame[target]) // player exists
-				target++; // even though playernums are from 0 to 31, target is 1 to 32, so up that by 1 to have it work!
-			else
-			{
-				HU_AddChatText(va("\x82NOTICE: \x80Player %d does not exist.", target), false); // same
-				return;
-			}
-
-			// we need to get rid of the /pm<node>
-			newmsg = msg+5+spc;
-			strlcpy(msg, newmsg, 255);
-		}
-		if (ci > 3) // don't send target+flags+empty message.
-		{
-			if (teamtalk)
-				buf[0] = -1; // target
-			else
-				buf[0] = target;
-
-			buf[1] = 0; // flags
-			SendNetXCmd(XD_SAY, buf, 2 + strlen(&buf[2]) + 1);
-		}
-		return;
-	}
+	if (c == KEY_ENTER) CHAT_Send();
 }
 #endif
 
@@ -1219,6 +1220,65 @@ static boolean justscrolledup;
 static INT16 typelines = 1; // number of drawfill lines we need when drawing the chat. it's some weird hack and might be one frame off but I'm lazy to make another loop.
 // It's up here since it has to be reset when we open the chat.
 #endif
+
+void CHAT_Close() {
+	#ifdef __SWITCH__
+		Switch_Keyboard_Close();
+	#endif
+
+	chat_on = false;
+	c_input = 0; // reset input cursor
+}
+
+void CHAT_SetText(const char* str) {
+	// if (strlen(str) > HU_MAXMSGLEN) return; // Overflow prevention
+	SDL_strlcpy(w_chat, str, HU_MAXMSGLEN);
+}
+
+void CHAT_SendText(const char* str) {
+	CHAT_SetText(str);
+	CHAT_Send();
+	CHAT_Close();
+}
+
+
+#ifdef __SWITCH__
+
+#include "switch/swkbd.h"
+
+void CHAT_Switch_SwkbdChanged(const char* str, SwkbdChangedStringArg* arg) {
+	CHAT_SetText(str);
+	c_input = arg->cursorPos;
+}
+
+void CHAT_Switch_SwkbdMovedCursor(const char* str, SwkbdMovedCursorArg* arg) {
+	c_input = arg->cursorPos;
+}
+
+void CHAT_Switch_SwkbdDecidedEnter(const char* str, SwkbdDecidedEnterArg* arg) {
+	CHAT_SendText(str);
+}
+
+#endif
+
+void CHAT_Open(boolean teamtalkArg) {
+	// This needs to come first for some reason, otherwise things get wacky
+	#ifdef __SWITCH__
+		swkbdInlineSetChangedStringCallback(&switch_kbdinline, CHAT_Switch_SwkbdChanged);
+		swkbdInlineSetMovedCursorCallback(&switch_kbdinline, CHAT_Switch_SwkbdMovedCursor);
+		swkbdInlineSetDecidedEnterCallback(&switch_kbdinline, CHAT_Switch_SwkbdDecidedEnter);
+		swkbdInlineSetInputText(&switch_kbdinline, "");
+		swkbdInlineSetCursorPos(&switch_kbdinline, 0);
+		swkbdInlineSetKeytopTranslate(&switch_kbdinline, 0, 0.445); // Place kb above chatbox
+		Switch_Keyboard_Open();
+	#endif
+
+	chat_on = true;
+	w_chat[0] = 0;
+	teamtalk = teamtalkArg;
+	chat_scrollmedown = true;
+	typelines = 1;
+}
 
 //
 // Returns true if key eaten
@@ -1253,25 +1313,25 @@ boolean HU_Responder(event_t *ev)
 #ifndef NONET
 	if (!chat_on)
 	{
+		boolean talkKeyPressed = (
+			ev->data1 == gamecontrol[gc_talkkey][0] ||
+			ev->data1 == gamecontrol[gc_talkkey][1]
+		); // Check both binds
+
+		boolean teamKeyPressed = (
+			ev->data1 == gamecontrol[gc_teamkey][0] ||
+			ev->data1 == gamecontrol[gc_teamkey][1]
+		); // Check both binds
+
 		// enter chat mode
-		if ((ev->data1 == gamecontrol[gc_talkkey][0] || ev->data1 == gamecontrol[gc_talkkey][1])
-			&& netgame && !OLD_MUTE) // check for old chat mute, still let the players open the chat incase they want to scroll otherwise.
+		if (talkKeyPressed && netgame && !OLD_MUTE) // check for old chat mute, still let the players open the chat incase they want to scroll otherwise.
 		{
-			chat_on = true;
-			w_chat[0] = 0;
-			teamtalk = false;
-			chat_scrollmedown = true;
-			typelines = 1;
+			CHAT_Open(false);
 			return true;
 		}
-		if ((ev->data1 == gamecontrol[gc_teamkey][0] || ev->data1 == gamecontrol[gc_teamkey][1])
-			&& netgame && !OLD_MUTE)
+		if (teamKeyPressed && netgame && !OLD_MUTE)
 		{
-			chat_on = true;
-			w_chat[0] = 0;
-			teamtalk = G_GametypeHasTeams();	// Don't teamtalk if we don't have teams.
-			chat_scrollmedown = true;
-			typelines = 1;
+			CHAT_Open(G_GametypeHasTeams()); // Don't teamtalk if we don't have teams.
 			return true;
 		}
 	}
@@ -1346,17 +1406,15 @@ boolean HU_Responder(event_t *ev)
 		}
 		if (c == KEY_ENTER)
 		{
-			chat_on = false;
-			c_input = 0; // reset input cursor
-			chat_scrollmedown = true; // you hit enter, so you might wanna autoscroll to see what you just sent. :)
+			CHAT_Close();
+			chat_scrollmedown = true; // you sent a message, so you might wanna autoscroll to see what you just sent. :^)
 		}
 		else if (c == KEY_ESCAPE
 			|| ((c == gamecontrol[gc_talkkey][0] || c == gamecontrol[gc_talkkey][1]
 			|| c == gamecontrol[gc_teamkey][0] || c == gamecontrol[gc_teamkey][1])
 			&& c >= KEY_MOUSE1)) // If it's not a keyboard key, then the chat button is used as a toggle.
 		{
-			chat_on = false;
-			c_input = 0; // reset input cursor
+			CHAT_Close();
 		}
 		else if ((c == KEY_UPARROW || c == KEY_MOUSEWHEELUP) && chat_scroll > 0 && !OLDCHAT) // CHAT SCROLLING YAYS!
 		{

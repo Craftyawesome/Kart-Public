@@ -747,6 +747,36 @@ static void CON_InputDelChar(void)
 // ----
 //
 
+#ifdef __SWITCH__
+
+void CON_Responder_SWITCH_SwkbdChanged_cb(const char* str, SwkbdChangedStringArg* arg) {
+	CON_InputSetString(str);
+	input_cur = arg->cursorPos;
+}
+
+void CON_Responder_SWITCH_SwkbdMovedCursor_cb(const char* str, SwkbdMovedCursorArg* arg) {
+	input_cur = arg->cursorPos;
+}
+
+void CON_Responder_SWITCH_SwkbdDecidedEnter_cb(const char* str, SwkbdDecidedEnterArg* arg) {
+	CON_InputSetString(str);
+
+	if (!input_len)
+		return true;
+
+	// push the command
+	COM_BufAddText(inputlines[inputline]);
+	COM_BufAddText("\n");
+
+	CONS_Printf("\x86""%c""\x80""%s\n", CON_PROMPTCHAR, inputlines[inputline]);
+
+	inputline = (inputline+1) & 31;
+	inputhist = inputline;
+	CON_InputClear();
+}
+
+#endif
+
 // Handles console key input
 //
 boolean CON_Responder(event_t *ev)
@@ -1016,11 +1046,14 @@ boolean CON_Responder(event_t *ev)
 	completion[0] = 0;
 
 	#ifdef __SWITCH__
-	if (key == KEY_JOY1 + 1) { // B, leads into KEY_ENTER
-		Switch_Keyboard_GetText("Console Command", inputlines[inputline]);
-		if (strlen(swkbdResult) == 0) return true;
-		CON_InputSetString(swkbdResult);
-		key = KEY_ENTER;
+	if (key == KEY_JOY1 + 1) { // B
+		swkbdInlineSetChangedStringCallback(&switch_kbdinline, CON_Responder_SWITCH_SwkbdChanged_cb);
+		swkbdInlineSetMovedCursorCallback(&switch_kbdinline, CON_Responder_SWITCH_SwkbdMovedCursor_cb);
+		swkbdInlineSetDecidedEnterCallback(&switch_kbdinline, CON_Responder_SWITCH_SwkbdDecidedEnter_cb);
+		swkbdInlineSetCursorPos(&switch_kbdinline, 0x0);
+		swkbdInlineSetInputText(&switch_kbdinline, inputlines[inputline]);
+		swkbdInlineSetKeytopTranslate(&switch_kbdinline, 0, 0); // Place kb above chatbox
+		Switch_Keyboard_Open();
 	}
 	#endif
 
