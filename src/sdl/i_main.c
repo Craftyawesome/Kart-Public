@@ -167,6 +167,8 @@ extern void userAppInit()
 
 extern void userAppExit()
 {
+	Switch_Keyboard_Deinit();
+
 	#ifdef ENABLE_NXLINK
     deinitNxLink();
 	#else

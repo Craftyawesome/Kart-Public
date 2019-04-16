@@ -2511,7 +2511,6 @@ boolean M_Responder(event_t *ev)
 				case KEY_JOY1 + 1: // B
 					ch = KEY_ENTER;
 					break;
-					break;
 				case KEY_JOY1 + 11: // Minus
 					ch = KEY_ESCAPE;
 					break;

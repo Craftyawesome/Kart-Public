@@ -8,6 +8,7 @@ SwkbdAppearArg switch_appearArg;
 Result switch_kdbresult;
 SwkbdState switch_kbdstate;
 
+void Switch_Keyboard_Deinit();
 void Switch_Keyboard_Init();
 void Switch_Keyboard_Update();
 void Switch_Keyboard_Open();
