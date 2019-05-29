@@ -652,7 +652,6 @@ UINT16 W_InitFile(const char *filename)
 	restype_t type;
 	UINT16 numlumps = 0;
 	size_t i;
-	size_t packetsize;
 	UINT8 md5sum[16];
 	boolean important;
 
@@ -684,24 +683,7 @@ UINT16 W_InitFile(const char *filename)
 	if ((handle = W_OpenWadFile(&filename, true)) == NULL)
 		return INT16_MAX;
 
-	// Check if wad files will overflow fileneededbuffer. Only the filename part
-	// is send in the packet; cf.
-	// see PutFileNeeded in d_netfil.c
-	if ((important = !W_VerifyNMUSlumps(filename)))
-	{
-		packetsize = packetsizetally + nameonlylength(filename) + 22;
-
-		if (packetsize > MAXFILENEEDED*sizeof(UINT8))
-		{
-			CONS_Alert(CONS_ERROR, M_GetText("Maximum wad files reached\n"));
-			refreshdirmenu |= REFRESHDIR_MAX;
-			if (handle)
-				fclose(handle);
-			return INT16_MAX;
-		}
-
-		packetsizetally = packetsize;
-	}
+	important = !W_VerifyNMUSlumps(filename);
 
 #ifndef NOMD5
 	//
@@ -1187,23 +1169,17 @@ void zerr(int ret)
 #define NO_PNG_LUMPS
 
 #ifdef NO_PNG_LUMPS
-static void ErrorIfPNG(void *d, size_t s, char *f, char *l)
+static void ErrorIfPNG(UINT8 *d, size_t s, char *f, char *l)
 {
     if (s < 67) // http://garethrees.org/2007/11/14/pngcrush/
         return;
-#define sigcheck ((UINT8 *)d)
-    if (sigcheck[0] == 0x89
-        && sigcheck[1] == 0x50
-        && sigcheck[2] == 0x4e
-        && sigcheck[3] == 0x47
-        && sigcheck[4] == 0x0d
-        && sigcheck[5] == 0x0a
-        && sigcheck[6] == 0x1a
-        && sigcheck[7] == 0x0a)
+    // Check for PNG file signature using memcmp
+    // As it may be faster on CPUs with slow unaligned memory access
+    // Ref: http://www.libpng.org/pub/png/spec/1.2/PNG-Rationale.html#R.PNG-file-signature
+    if (memcmp(&d[0], "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a", 8) == 0)
     {
         I_Error("W_Wad: Lump \"%s\" in file \"%s\" is a .PNG - please convert to either Doom or Flat (raw) image format.", l, f);
     }
-#undef sigcheck
 }
 #endif
 
@@ -1297,6 +1273,7 @@ size_t W_ReadLumpHeaderPwad(UINT16 wad, UINT16 lump, void *dest, size_t size, si
 			//I_Error("ZWAD files not supported on this platform.");
 			return 0;
 #endif
+
 		}
 #ifdef HAVE_ZLIB
 	case CM_DEFLATE: // Is it compressed via DEFLATE? Very common in ZIPs/PK3s, also what most doom-related editors support.
