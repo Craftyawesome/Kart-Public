@@ -15,7 +15,20 @@ This fork aims to support the Nintendo Switch.
 
 See [SRB2 Wiki/Source code compiling](http://wiki.srb2.org/wiki/Source_code_compiling). The compiling process for SRB2Kart is largely identical to SRB2.
 
-Switch-specific instructions will be available Soon(TM).
+### Switch
+
+Follow the instructions [here](http://wiki.srb2.org/wiki/Source_code_compiling/Makefiles), using the following make command:
+```
+make -C src/ SWITCH=1
+```
+Or, if you want to enable network debugging:
+```
+make -C src/ SWITCH=1 ENABLE_NXLINK=1
+```
+If you plan on switching flags, make sure to run `make clean` first.
+
+More complete build instructions coming soon(TM).
+
 
 ## Disclaimer
 Kart Krew is in no way affiliated with SEGA or Sonic Team. We do not claim ownership of any of SEGA's intellectual property used in SRB2.
