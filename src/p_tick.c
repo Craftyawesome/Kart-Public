@@ -28,7 +28,7 @@
 #include "m_cheat.h"
 
 #ifdef __SWITCH__
-#include <switch.h>
+#include <switch/services/applet.h>
 #endif
 
 tic_t leveltime;
