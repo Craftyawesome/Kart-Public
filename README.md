@@ -5,6 +5,8 @@
 This fork aims to support the Nintendo Switch.
 
 ## Installation Instructions
+You can find downloads in [releases](https://github.com/heyjoeway/Kart-Public/releases).
+
 1. Make sure your Switch can run homebrew.
 2. Extract the contents of the zip to the root of your SD card.
 3. Start SRB2Kart via hbmenu (or whatever method you prefer).
