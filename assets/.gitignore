@@ -4,6 +4,7 @@
 *.wad
 *.txt
 *.kart
+*.cfg
 *.exe
 !README.txt
 !HISTORY.txt
