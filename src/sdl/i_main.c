@@ -156,6 +156,7 @@ extern void userAppInit()
 	// heyjoeway: Allows loading in the background
 	// This is eventually turned off by D_SRB2Loop
 	appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
+	appletInitializeGamePlayRecording();
 	Switch_Keyboard_Init();
 
 	#ifdef ENABLE_NXLINK
