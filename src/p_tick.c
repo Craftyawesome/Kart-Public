@@ -609,6 +609,8 @@ void P_Ticker(boolean run)
 			leveltime = (leveltime-1) & ~3;
 			G_PreviewRewind(leveltime);
 		}
+		else if (demo.freecam && democam.cam)	// special case: allow freecam to MOVE during pause!
+			P_DemoCameraMovement(democam.cam);
 
 		return;
 	}
@@ -701,7 +703,10 @@ void P_Ticker(boolean run)
 
 	if (run)
 		leveltime++;
-	timeinmap++;
+
+	// as this is mostly used for HUD stuff, add the record attack specific hack to it as well!
+	if (!(modeattacking && !demo.playback) || leveltime >= starttime - TICRATE*4)
+		timeinmap++;
 
 	/*if (G_TagGametype())
 		P_DoTagStuff();
@@ -727,15 +732,15 @@ void P_Ticker(boolean run)
 			}
 		}
 
-		if (countdown > 1)
-			countdown--;
+		if (racecountdown > 1)
+			racecountdown--;
 
-		if (countdown2)
-			countdown2--;
+		if (exitcountdown > 1)
+			exitcountdown--;
 
-		if (indirectitemcooldown)
+		if (indirectitemcooldown > 1)
 			indirectitemcooldown--;
-		if (hyubgone)
+		if (hyubgone > 1)
 			hyubgone--;
 
 		if (G_BattleGametype())

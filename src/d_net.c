@@ -811,9 +811,6 @@ static const char *packettypename[NUMPACKETTYPE] =
 	"CLIENT4MIS",
 	"BASICKEEPALIVE",
 
-	"JOINCHALLENGE",
-	"DOWNLOADFILESOKAY",
-
 	"FILEFRAGMENT",
 	"TEXTCMD",
 	"TEXTCMD2",
@@ -839,7 +836,7 @@ static void DebugPrintpacket(const char *header)
 			break;
 		case PT_CLIENTJOIN:
 			fprintf(debugfile, "    number %d mode %d\n", netbuffer->u.clientcfg.localplayers,
-				netbuffer->u.clientcfg.needsdownload);
+				netbuffer->u.clientcfg.mode);
 			break;
 		case PT_SERVERTICS:
 		{
@@ -848,7 +845,7 @@ static void DebugPrintpacket(const char *header)
 			size_t ntxtcmd = &((UINT8 *)netbuffer)[doomcom->datalength] - cmd;
 
 			fprintf(debugfile, "    firsttic %u ply %d tics %d ntxtcmd %s\n    ",
-				(UINT32)ExpandTics(serverpak->starttic), serverpak->numslots, serverpak->numtics, sizeu1(ntxtcmd));
+				(UINT32)serverpak->starttic, serverpak->numslots, serverpak->numtics, sizeu1(ntxtcmd));
 			/// \todo Display more readable information about net commands
 			fprintfstringnewline((char *)cmd, ntxtcmd);
 			/*fprintfstring((char *)cmd, 3);
@@ -871,8 +868,8 @@ static void DebugPrintpacket(const char *header)
 		case PT_NODEKEEPALIVE:
 		case PT_NODEKEEPALIVEMIS:
 			fprintf(debugfile, "    tic %4u resendfrom %u\n",
-				(UINT32)ExpandTics(netbuffer->u.clientpak.client_tic),
-				(UINT32)ExpandTics (netbuffer->u.clientpak.resendfrom));
+				(UINT32)netbuffer->u.clientpak.client_tic,
+				(UINT32)netbuffer->u.clientpak.resendfrom);
 			break;
 		case PT_BASICKEEPALIVE:
 			fprintf(debugfile, "    keep alive\n");
