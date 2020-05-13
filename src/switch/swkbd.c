@@ -1,8 +1,5 @@
 // Borrowed from https://github.com/joel16/NX-Shell/ (/source/keyboard.c)
 
-#include "../p_local.h"
-#include "../s_sound.h"
-
 #include "swkbd.h"
 #include <switch/applets/swkbd.h>
 

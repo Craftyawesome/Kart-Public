@@ -2216,7 +2216,7 @@ static boolean CL_ServerConnectionTicker(boolean viams, const char *tmpsave, tic
 			#ifdef __SWITCH__
 				// Since Plus is the accept button for the Switch software keyboard, accepting will immediately cancel the connection.
 				// Therefore, ignore this specific button.
-				if (ch == KEY_JOY1+10) return false;
+				if (key == KEY_JOY1+10) return false;
 			#endif
 			CONS_Printf(M_GetText("Network game synchronization aborted.\n"));
 			D_QuitNetGame();

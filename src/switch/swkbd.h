@@ -3,10 +3,10 @@
 
 #include <switch/applets/swkbd.h>
 
-SwkbdInline switch_kbdinline;
-SwkbdAppearArg switch_appearArg;
-Result switch_kdbresult;
-SwkbdState switch_kbdstate;
+extern SwkbdInline switch_kbdinline;
+extern SwkbdAppearArg switch_appearArg;
+extern Result switch_kdbresult;
+extern SwkbdState switch_kbdstate;
 
 void Switch_Keyboard_Deinit();
 void Switch_Keyboard_Init();

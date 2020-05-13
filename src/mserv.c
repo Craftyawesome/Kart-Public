@@ -139,6 +139,7 @@
 #define PORT_MSG_POS     32
 #define HOSTNAME_MSG_POS 40
 
+INT16 ms_RoomId;
 
 #if defined(_MSC_VER)
 #pragma pack(1)

@@ -38,6 +38,8 @@ extern INT32 msg_id;
 #include "p_local.h" // camera info
 #include "m_misc.h" // for tunes command
 
+const char *compat_special_music_slots[16];
+
 #ifdef HAVE_BLUA
 #include "lua_hook.h" // MusicChange hook
 #endif

@@ -43,6 +43,18 @@
 #endif
 
 #ifdef HAVE_CURL
+#include "switch/crypto/aes.h"
+#include "switch/crypto/aes_cbc.h"
+#include "switch/crypto/aes_ctr.h"
+#include "switch/crypto/aes_xts.h"
+#include "switch/crypto/cmac.h"
+
+#include "switch/crypto/sha256.h"
+#include "switch/crypto/sha1.h"
+#include "switch/crypto/hmac.h"
+
+#include "switch/crypto/crc.h"
+
 #include "curl/curl.h"
 #endif
 

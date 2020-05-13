@@ -1,6 +1,6 @@
 #!/bin/sh
-INSTALLERURL="https://github.com/STJr/Kart-Public/releases/download/v1.1/srb2kart-v11-Installer.exe"
-PATCHURL="https://github.com/STJr/Kart-Public/releases/download/v1.1/srb2kart-v11-Patch.zip"
+INSTALLERURL="https://github.com/STJr/Kart-Public/releases/download/v1.2/srb2kart-v12-Installer.exe"
+PATCHURL="https://github.com/STJr/Kart-Public/releases/download/v1.2/srb2kart-v12-Patch.zip"
 DOWNLOADCMD="curl -Lo"
 
 cd assets
