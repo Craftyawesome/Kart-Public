@@ -71,6 +71,10 @@ char  logfilename[1024];
 #endif
 
 #if defined (_WIN32)
+#include "exchndl.h"
+#endif
+
+#if defined (_WIN32)
 #include "../win32/win_dbg.h"
 typedef BOOL (WINAPI *p_IsDebuggerPresent)(VOID);
 #endif
@@ -105,6 +109,20 @@ static inline VOID MakeCodeWritable(VOID)
 	if (!VirtualProtect(pA,pS,NewRights,&OldRights))
 		I_Error("Could not make code writable\n");
 #endif
+}
+#endif
+
+
+#ifdef _WIN32
+static void
+ChDirToExe (void)
+{
+	CHAR path[MAX_PATH];
+	if (GetModuleFileNameA(NULL, path, MAX_PATH) > 0)
+	{
+		strrchr(path, '\\')[0] = '\0';
+		SetCurrentDirectoryA(path);
+	}
 }
 #endif
 
@@ -199,6 +217,10 @@ int main(int argc, char **argv)
 #endif
 #endif
 
+#ifdef _WIN32
+	ChDirToExe();
+#endif
+
 	logdir = D_Home();
 
 #ifdef LOGMESSAGES
@@ -225,7 +247,7 @@ int main(int argc, char **argv)
 			)
 #endif
 		{
-			LoadLibraryA("exchndl.dll");
+			ExcHndlInit();
 		}
 	}
 #ifndef __MINGW32__
