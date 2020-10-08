@@ -17,10 +17,10 @@ void Switch_Keyboard_Init() {
 	rc = swkbdInlineCreate(&switch_kbdinline);
 	// Launch the applet.
 
-	switch_kbdinline.calcArg.initArg.mode = SwkbdInlineMode_AppletDisplay;
+	// switch_kbdinline.calcArg.initArg.mode = SwkbdInlineMode_AppletDisplay;
 
 	if (R_SUCCEEDED(rc))
-		rc = swkbdInlineLaunch(&switch_kbdinline);
+		rc = swkbdInlineLaunchForLibraryApplet(&switch_kbdinline, SwkbdInlineMode_AppletDisplay, 0);
 
 	swkbdInlineMakeAppearArg(&switch_appearArg, SwkbdType_Normal);
 	// You can optionally set switch_appearArg text / fields here.

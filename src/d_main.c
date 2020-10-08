@@ -737,12 +737,12 @@ void D_SRB2Loop(void)
 #endif
 
 #ifdef __SWITCH__
-	Switch_Keyboard_Update();
+		Switch_Keyboard_Update();
 
-	if(!appletMainLoop()) {
-		I_Quit();
-		M_QuitResponse('y');
-	}
+		if(!appletMainLoop()) {
+			I_Quit();
+			M_QuitResponse('y');
+		}
 #endif
 	}
 }
