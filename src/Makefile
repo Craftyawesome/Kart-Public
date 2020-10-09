@@ -97,6 +97,8 @@ ALL_SYSTEMS=\
 	MACOSX\
 	SDL\
 
+ifndef SWITCH # i dont fucking care anymore
+
 # check for user specified system
 ifeq (,$(filter $(ALL_SYSTEMS),$(.VARIABLES)))
 ifeq ($(OS),Windows_NT) # all windows are Windows_NT...
@@ -133,6 +135,7 @@ else # if you on the *nix
 endif
 endif
 
+endif
 
 # SRB2 data files
 D_DIR?=../bin/Resources
@@ -148,6 +151,20 @@ D_FILES=$(D_DIR)/srb2.srb \
 	$(D_DIR)/music.kart \
 
 PKG_CONFIG?=pkg-config
+
+ifdef ENABLE_NXLINK
+	CPPFLAGS+=-DENABLE_NXLINK
+endif
+
+ifdef SWITCH
+SDL=1
+NOOBJDUMP=1
+NOASM=1
+NONX86=1
+NOHW=1
+NOGME=1
+OBJS+=$(OBJDIR)/switch/swkbd.o
+endif
 
 ifdef WIILINUX
 LINUX=1
@@ -230,15 +247,6 @@ endif
 ifdef PS3N
 NONX86=1
 NOHW=1
-endif
-
-ifdef SWITCH
-NOCURL=1
-NOOBJDUMP=1
-NOASM=1
-NONX86=1
-NOHW=1
-OBJS+=$(OBJDIR)/switch/swkbd.o
 endif
 
 ifdef DJGPPDOS
@@ -527,10 +535,6 @@ endif
 
 ifdef DEVELOP
 	CPPFLAGS+=-DDEVELOP
-endif
-
-ifdef ENABLE_NXLINK
-	CPPFLAGS+=-DENABLE_NXLINK
 endif
 
 OPTS+=$(CPPFLAGS)

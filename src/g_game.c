@@ -51,7 +51,6 @@
 #include "md5.h" // demo checksums
 #include "k_kart.h" // SRB2kart
 
-char savegamename[256];
 #ifdef HAVE_DISCORDRPC
 #include "discord.h"
 #endif

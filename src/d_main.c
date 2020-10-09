@@ -747,6 +747,7 @@ void D_SRB2Loop(void)
 		if(!appletMainLoop()) {
 			I_Quit();
 			M_QuitResponse('y');
+		}
 #endif
 
 #ifdef HAVE_DISCORDRPC
