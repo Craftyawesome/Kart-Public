@@ -1,5 +1,7 @@
 # SRB2Kart
 
+[![Nintendo Switch](https://github.com/heyjoeway/Kart-Public/actions/workflows/switch.yml/badge.svg)](https://github.com/heyjoeway/Kart-Public/actions/workflows/switch.yml)
+
 [SRB2Kart](https://srb2.org/mods/) is a kart racing mod based on the 3D Sonic the Hedgehog fangame [Sonic Robo Blast 2](https://srb2.org/), based on a modified version of [Doom Legacy](http://doomlegacy.sourceforge.net/).
 
 This fork aims to support the Nintendo Switch.
