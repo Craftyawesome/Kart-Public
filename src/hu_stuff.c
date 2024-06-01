@@ -1234,6 +1234,7 @@ static INT16 typelines = 1; // number of drawfill lines we need when drawing the
 
 void CHAT_Close() {
 	#ifdef __SWITCH__
+		#include "switch/swkbd.h"
 		Switch_Keyboard_Close();
 	#endif
 
