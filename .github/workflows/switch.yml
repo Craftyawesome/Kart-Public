@@ -1,20 +1,16 @@
 name: Nintendo Switch
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ switch-port ]
   pull_request:
     branches: [ switch-port ]
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container: devkitpro/devkita64:20200730
     steps:
-    - name: Install 7z/zip
-      run: |
-        apt-get update
-        apt-get install -y zip p7zip-full
     - name: Checkout repo
       uses: actions/checkout@v1
     - name: Download assets
