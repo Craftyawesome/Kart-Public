@@ -2590,25 +2590,11 @@ boolean M_Responder(event_t *ev)
 				break;
 			#ifdef __SWITCH__
 				// FIXME
-				case KEY_JOY1 + 1: // B
-					ch = KEY_ENTER;
-					break;
-				case KEY_JOY1 + 11: // Minus
+				//case KEY_JOY1 + 1: // A
+					//ch = KEY_ENTER;
+					//break;
+				case KEY_JOY1 + 4: // Minus
 					ch = KEY_ESCAPE;
-					break;
-
-				// "D-pad"
-				case KEY_JOY1 + 13:
-					ch = KEY_UPARROW;
-					break;
-				case KEY_JOY1 + 15:
-					ch = KEY_DOWNARROW;
-					break;
-				case KEY_JOY1 + 12:
-					ch = KEY_LEFTARROW;
-					break;
-				case KEY_JOY1 + 14:
-					ch = KEY_RIGHTARROW;
 					break;
 			#endif
 		}

@@ -39,8 +39,3 @@ jobs:
       with:
         name: update_nro
         path: bin/Switch/Release/kartswitch_*.update.nro.zip
-    - name: Upload update zip
-      uses: actions/upload-artifact@v2
-      with:
-        name: update
-        path: bin/Switch/Release/kartswitch_*.update.zip
