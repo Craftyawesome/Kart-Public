@@ -1,6 +1,7 @@
 name: Nintendo Switch
 
 on:
+  workflow_dispatch:
   push:
     branches: [ switch-port ]
   pull_request:
@@ -8,8 +9,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
-    container: devkitpro/devkita64:20200730
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64
     steps:
     - name: Install 7z/zip
       run: |

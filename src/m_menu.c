@@ -2505,7 +2505,7 @@ void M_Responder_Switch_SwkbdChanged(const char* str, SwkbdChangedStringArg* arg
 	CV_Set(currentMenu->menuitems[itemOn].itemaction, str);
 }
 
-void M_Responder_Switch_SwkbdMovedCursor(const char* str, SwkbdChangedStringArg* arg) {
+void M_Responder_Switch_SwkbdMovedCursor(const char* str, SwkbdMovedCursorArg* arg) {
 	char *currentStr = ((consvar_t *)currentMenu->menuitems[itemOn].itemaction)->string;
 	swkbdInlineSetCursorPos(&switch_kbdinline, strlen(currentStr)); // Place swkbd cursor at string end
 }
@@ -9315,13 +9315,13 @@ void M_HandleConnectIP_Switch_SwkbdChanged(const char* str, SwkbdChangedStringAr
 	SDL_strlcpy(setupm_ip, str, sizeof(setupm_ip));
 }
 
-void M_HandleConnectIP_Switch_SwkbdDecidedEnter(const char* str, SwkbdChangedStringArg* arg) {
+void M_HandleConnectIP_Switch_SwkbdDecidedEnter(const char* str, SwkbdDecidedEnterArg* arg) {
 	S_StartSound(NULL,sfx_menu1); // Tails
 	currentMenu->lastOn = itemOn;
 	M_ConnectIP(1);
 }
 
-void M_HandleConnectIP_Switch_SwkbdMovedCursor(const char* str, SwkbdChangedStringArg* arg) {
+void M_HandleConnectIP_Switch_SwkbdMovedCursor(const char* str, SwkbdMovedCursorArg* arg) {
 	swkbdInlineSetCursorPos(&switch_kbdinline, strlen(setupm_ip)); // Place swkbd cursor at string end
 }
 

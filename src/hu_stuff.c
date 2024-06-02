@@ -54,6 +54,11 @@
 #include "s_sound.h" // song credits
 #include "k_kart.h"
 
+#ifdef __SWITCH__
+#include "switch/swkbd.h"
+#endif
+
+
 // coords are scaled
 #define HU_INPUTX 0
 #define HU_INPUTY 0
@@ -1243,7 +1248,7 @@ void CHAT_Close() {
 
 void CHAT_SetText(const char* str) {
 	// if (strlen(str) > HU_MAXMSGLEN) return; // Overflow prevention
-	SDL_strlcpy(w_chat, str, HU_MAXMSGLEN);
+	strlcpy(w_chat, str, HU_MAXMSGLEN);
 }
 
 void CHAT_SendText(const char* str) {
@@ -1254,8 +1259,6 @@ void CHAT_SendText(const char* str) {
 
 
 #ifdef __SWITCH__
-
-#include "switch/swkbd.h"
 
 void CHAT_Switch_SwkbdChanged(const char* str, SwkbdChangedStringArg* arg) {
 	CHAT_SetText(str);

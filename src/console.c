@@ -895,7 +895,7 @@ void CON_Responder_SWITCH_SwkbdDecidedEnter_cb(const char* str, SwkbdDecidedEnte
 	CON_InputSetString(str);
 
 	if (!input_len)
-		return true;
+		return;
 
 	// push the command
 	COM_BufAddText(inputlines[inputline]);
