@@ -139,6 +139,9 @@ typedef long ssize_t;
 	#define strlwr                  _strlwr
 #endif
 
+char *strcasestr(const char *in, const char *what);
+#define stristr strcasestr
+
 #if defined (macintosh) //|| defined (__APPLE__) //skip all boolean/Boolean crap
 	#define true 1
 	#define false 0
@@ -404,5 +407,7 @@ typedef UINT32 tic_t;
 #else
 #define UINT2RGBA(a) (UINT32)((a&0xff)<<24)|((a&0xff00)<<8)|((a&0xff0000)>>8)|(((UINT32)a&0xff000000)>>24)
 #endif
+
+typedef UINT64 precise_t;
 
 #endif //__DOOMTYPE__

@@ -11,7 +11,7 @@
 /*
 Documentation available here.
 
-                     <https://ms.kartkrew.org/tools/api/2/>
+                     <https://ms.kartkrew.org/tools/api/2.2/>
 */
 
 #ifdef HAVE_CURL
@@ -21,6 +21,7 @@ Documentation available here.
 #include "doomdef.h"
 #include "d_clisrv.h"
 #include "command.h"
+#include "console.h"
 #include "m_argv.h"
 #include "m_menu.h"
 #include "mserv.h"
@@ -51,6 +52,8 @@ consvar_t cv_masterserver_token = {
 	NULL, 0, NULL, NULL, 0, 0, NULL/* C90 moment */
 };
 
+#define HMS_QUERY_VERSION "?v=2.2"
+
 #ifdef MASTERSERVER
 
 static int hms_started;
@@ -76,6 +79,19 @@ Contact_error (void)
 	CONS_Alert(CONS_ERROR,
 			"There was a problem contacting the master server...\n"
 	);
+}
+
+static void
+Printf_url (const char *url)
+{
+	boolean startup;
+
+	I_lock_mutex(&con_mutex);
+	startup = con_startup;
+	I_unlock_mutex(con_mutex);
+
+	(startup ? I_OutputMsg : CONS_Printf)(
+			"HMS: connecting '%s'...\n", url);
 }
 
 static size_t
@@ -138,7 +154,7 @@ HMS_connect (const char *format, ...)
 		return NULL;
 	}
 
-	if (cv_masterserver_token.string[0])
+	if (cv_masterserver_token.string && cv_masterserver_token.string[0])
 	{
 		quack_token = curl_easy_escape(curl, cv_masterserver_token.string, 0);
 		token_length = ( sizeof "&token="-1 )+ strlen(quack_token);
@@ -157,7 +173,7 @@ HMS_connect (const char *format, ...)
 
 	va_start (ap, format);
 	url = malloc(seek + vsnprintf(0, 0, format, ap) +
-			sizeof "?v=2" - 1 +
+			sizeof HMS_QUERY_VERSION - 1 +
 			token_length + 1);
 	va_end (ap);
 
@@ -171,13 +187,13 @@ HMS_connect (const char *format, ...)
 	seek += vsprintf(&url[seek], format, ap);
 	va_end (ap);
 
-	strcpy(&url[seek], "?v=2");
-	seek += sizeof "?v=2" - 1;
+	strcpy(&url[seek], HMS_QUERY_VERSION);
+	seek += sizeof HMS_QUERY_VERSION - 1;
 
 	if (quack_token)
 		sprintf(&url[seek], "&token=%s", quack_token);
 
-	CONS_Printf("HMS: connecting '%s'...\n", url);
+	Printf_url(url);
 
 	buffer = malloc(sizeof *buffer);
 	buffer->curl = curl;
@@ -497,6 +513,35 @@ HMS_compare_mod_version (char *buffer, size_t buffer_size)
 	HMS_end(hms);
 
 	return ok;
+}
+
+const char *
+HMS_fetch_rules (char *buffer, size_t buffer_size)
+{
+	struct HMS_buffer *hms;
+
+	hms = HMS_connect("rules");
+
+	if (! hms)
+		return NULL;
+
+	if (HMS_do(hms))
+	{
+		char *p = strstr(hms->buffer, "\n\n");
+
+		if (p)
+		{
+			p[1] = '\0';
+
+			strlcpy(buffer, hms->buffer, buffer_size);
+		}
+		else
+			buffer = NULL;
+	}
+
+	HMS_end(hms);
+
+	return buffer;
 }
 
 static char *

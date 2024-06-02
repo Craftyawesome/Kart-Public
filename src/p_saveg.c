@@ -21,6 +21,7 @@
 #include "p_local.h"
 #include "p_setup.h"
 #include "p_saveg.h"
+#include "r_fps.h"
 #include "r_things.h"
 #include "r_state.h"
 #include "w_wad.h"
@@ -246,6 +247,10 @@ static void P_NetArchivePlayers(void)
 		WRITEINT32(save_p, players[i].onconveyor);
 
 		WRITEUINT32(save_p, players[i].jointime);
+		WRITEUINT32(save_p, players[i].spectatorreentry);
+
+		WRITEUINT32(save_p, players[i].grieftime);
+		WRITEUINT8(save_p, players[i].griefstrikes);
 
 		WRITEUINT8(save_p, players[i].splitscreenindex);
 
@@ -411,6 +416,10 @@ static void P_NetUnArchivePlayers(void)
 		players[i].onconveyor = READINT32(save_p);
 
 		players[i].jointime = READUINT32(save_p);
+		players[i].spectatorreentry = READUINT32(save_p);
+
+		players[i].grieftime = READUINT32(save_p);
+		players[i].griefstrikes = READUINT8(save_p);
 
 		players[i].splitscreenindex = READUINT8(save_p);
 
@@ -1555,6 +1564,7 @@ static inline void SavePolyrotatetThinker(const thinker_t *th, const UINT8 type)
 	WRITEINT32(save_p, ht->polyObjNum);
 	WRITEINT32(save_p, ht->speed);
 	WRITEINT32(save_p, ht->distance);
+	WRITEUINT8(save_p, ht->turnobjs);
 }
 
 //
@@ -2157,12 +2167,22 @@ static void LoadMobjThinker(actionf_p1 thinker)
 			mobj->player->viewz = mobj->player->mo->z + mobj->player->viewheight;
 	}
 
+	if (mobj->type == MT_SKYBOX)
+	{
+		if (mobj->spawnpoint->options & MTF_OBJECTSPECIAL)
+			skyboxmo[1] = mobj;
+		else
+			skyboxmo[0] = mobj;
+	}
+
 	P_AddThinker(&mobj->thinker);
 
 	if (diff2 & MD2_WAYPOINTCAP)
 		P_SetTarget(&waypointcap, mobj);
 
 	mobj->info = (mobjinfo_t *)next; // temporarily, set when leave this function
+
+	R_AddMobjInterpolator(mobj);
 }
 
 //
@@ -2514,6 +2534,7 @@ static inline void LoadPolyrotatetThinker(actionf_p1 thinker)
 	ht->polyObjNum = READINT32(save_p);
 	ht->speed = READINT32(save_p);
 	ht->distance = READINT32(save_p);
+	ht->turnobjs = READUINT8(save_p);
 	P_AddThinker(&ht->thinker);
 }
 
@@ -2655,10 +2676,14 @@ static void P_NetUnArchiveThinkers(void)
 	{
 		next = currentthinker->next;
 
-		if (currentthinker->function.acp1 == (actionf_p1)P_MobjThinker)
+		if (currentthinker->function.acp1 == (actionf_p1)P_MobjThinker || currentthinker->function.acp1 == (actionf_p1)P_NullPrecipThinker)
 			P_RemoveSavegameMobj((mobj_t *)currentthinker); // item isn't saved, don't remove it
 		else
+		{
+			(next->prev = currentthinker->prev)->next = next;
+			R_DestroyLevelInterpolators(currentthinker);
 			Z_Free(currentthinker);
+		}
 	}
 
 	// we don't want the removed mobjs to come back
@@ -2998,14 +3023,14 @@ static void P_RelinkPointers(void)
 			{
 				temp = (UINT32)(size_t)mobj->hnext;
 				mobj->hnext = NULL;
-				if (!(mobj->hnext = P_FindNewPosition(temp)))
+				if (!P_SetTarget(&mobj->hnext, P_FindNewPosition(temp)))
 					CONS_Debug(DBG_GAMELOGIC, "hnext not found on %d\n", mobj->type);
 			}
 			if (mobj->hprev)
 			{
 				temp = (UINT32)(size_t)mobj->hprev;
 				mobj->hprev = NULL;
-				if (!(mobj->hprev = P_FindNewPosition(temp)))
+				if (!P_SetTarget(&mobj->hprev, P_FindNewPosition(temp)))
 					CONS_Debug(DBG_GAMELOGIC, "hprev not found on %d\n", mobj->type);
 			}
 			if (mobj->player && mobj->player->capsule)
@@ -3270,6 +3295,7 @@ static void P_NetArchiveMisc(void)
 	WRITEUINT8(save_p, nospectategrief);
 	WRITEUINT8(save_p, thwompsactive);
 	WRITESINT8(save_p, spbplace);
+	WRITEUINT8(save_p, startedInFreePlay);
 
 	// Is it paused?
 	if (paused)
@@ -3379,6 +3405,7 @@ static inline boolean P_NetUnArchiveMisc(void)
 	nospectategrief = READUINT8(save_p);
 	thwompsactive = (boolean)READUINT8(save_p);
 	spbplace = READSINT8(save_p);
+	startedInFreePlay = READUINT8(save_p);
 
 	// Is it paused?
 	if (READUINT8(save_p) == 0x2f)

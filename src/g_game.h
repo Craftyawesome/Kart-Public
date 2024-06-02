@@ -118,10 +118,10 @@ extern consvar_t cv_invertmouse/*, cv_alwaysfreelook, cv_chasefreelook, cv_mouse
 extern consvar_t cv_invertmouse2/*, cv_alwaysfreelook2, cv_chasefreelook2, cv_mousemove2*/;
 extern consvar_t cv_useranalog, cv_useranalog2, cv_useranalog3, cv_useranalog4;
 extern consvar_t cv_analog, cv_analog2, cv_analog3, cv_analog4;
-extern consvar_t cv_turnaxis,cv_moveaxis,cv_brakeaxis,cv_aimaxis,cv_lookaxis,cv_fireaxis,cv_driftaxis,cv_deadzone;
-extern consvar_t cv_turnaxis2,cv_moveaxis2,cv_brakeaxis2,cv_aimaxis2,cv_lookaxis2,cv_fireaxis2,cv_driftaxis2,cv_deadzone2;
-extern consvar_t cv_turnaxis3,cv_moveaxis3,cv_brakeaxis3,cv_aimaxis3,cv_lookaxis3,cv_fireaxis3,cv_driftaxis3,cv_deadzone3;
-extern consvar_t cv_turnaxis4,cv_moveaxis4,cv_brakeaxis4,cv_aimaxis4,cv_lookaxis4,cv_fireaxis4,cv_driftaxis4,cv_deadzone4;
+extern consvar_t cv_turnaxis,cv_moveaxis,cv_brakeaxis,cv_aimaxis,cv_lookaxis,cv_fireaxis,cv_driftaxis,cv_lookbackaxis,cv_xdeadzone,cv_ydeadzone;
+extern consvar_t cv_turnaxis2,cv_moveaxis2,cv_brakeaxis2,cv_aimaxis2,cv_lookaxis2,cv_fireaxis2,cv_driftaxis2,cv_lookbackaxis2,cv_xdeadzone2,cv_ydeadzone2;
+extern consvar_t cv_turnaxis3,cv_moveaxis3,cv_brakeaxis3,cv_aimaxis3,cv_lookaxis3,cv_fireaxis3,cv_driftaxis3,cv_lookbackaxis3,cv_xdeadzone3,cv_ydeadzone3;
+extern consvar_t cv_turnaxis4,cv_moveaxis4,cv_brakeaxis4,cv_aimaxis4,cv_lookaxis4,cv_fireaxis4,cv_driftaxis4,cv_lookbackaxis4,cv_xdeadzone4,cv_ydeadzone4;
 extern consvar_t cv_ghost_besttime, cv_ghost_bestlap, cv_ghost_last, cv_ghost_guest, cv_ghost_staff;
 
 typedef enum
@@ -135,6 +135,7 @@ typedef enum
 	AXISDEAD, //Axises that don't want deadzones
 	AXISFIRE,
 	AXISDRIFT,
+	AXISLOOKBACK,
 } axis_input_e;
 
 // mouseaiming (looking up/down with the mouse or keyboard)
@@ -171,6 +172,30 @@ void G_PlayerReborn(INT32 player);
 void G_InitNew(UINT8 pencoremode, const char *mapname, boolean resetplayer,
 	boolean skipprecutscene);
 char *G_BuildMapTitle(INT32 mapnum);
+
+struct searchdim
+{
+	UINT8 pos;
+	UINT8 siz;
+};
+
+typedef struct
+{
+	INT16  mapnum;
+	UINT8  matchc;
+	struct searchdim *matchd;/* offset that a pattern was matched */
+	UINT8  keywhc;
+	struct searchdim *keywhd;/* ...in KEYWORD */
+	UINT8  total;/* total hits */
+}
+mapsearchfreq_t;
+
+INT32 G_FindMap(const char *query, char **foundmapnamep,
+		mapsearchfreq_t **freqp, INT32 *freqc);
+void G_FreeMapSearch(mapsearchfreq_t *freq, INT32 freqc);
+
+/* Match map name by search + 2 digit map code or map number. */
+INT32 G_FindMapByNameOrCode(const char *query, char **foundmapnamep);
 
 // XMOD spawning
 mapthing_t *G_FindCTFStart(INT32 playernum);
@@ -290,7 +315,7 @@ boolean G_GametypeUsesLives(void);
 boolean G_GametypeHasTeams(void);
 boolean G_GametypeHasSpectators(void);
 boolean G_BattleGametype(void);
-INT16 G_SometimesGetDifferentGametype(void);
+UINT8 G_SometimesGetDifferentGametype(UINT8 prefgametype);
 UINT8 G_GetGametypeColor(INT16 gt);
 boolean G_RaceGametype(void);
 boolean G_TagGametype(void);

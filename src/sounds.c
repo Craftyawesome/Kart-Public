@@ -815,11 +815,13 @@ sfxinfo_t S_sfx[NUMSFX] =
   {"chain",  false, 255,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Mementos Reaper
   {"mkuma",  false,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Trigger Happy Havoc Monokuma
   {"toada",  false,  64,  0, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Arid Sands Toad scream
+  {"gemhit", false,  64,  0, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Opulence gem/coin tumbling
+  {"wrink", false,  64,  0, -1, NULL, 0,         -1,  -1, LUMPERROR}, // Some sort of ghoulie?
   {"bsnipe", false,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Banana sniping
-  {"join",   false,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Player joined server
-  {"leave",  false,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Player left server
-  {"requst", false,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Got a Discord join request
-  {"syfail", false,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Funny sync failure
+  {"join",    true,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Player joined server
+  {"leave",   true,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Player left server
+  {"requst",  true,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Got a Discord join request
+  {"syfail",  true,  96,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Funny sync failure
   {"itfree", false,  64,  0, -1, NULL, 0,        -1,  -1, LUMPERROR}, // :shitsfree:
   {"dbgsal", false, 255,  8, -1, NULL, 0,        -1,  -1, LUMPERROR}, // Debug notification
 
@@ -1034,7 +1036,7 @@ sfxenum_t S_AddSoundFx(const char *name, boolean singular, INT32 flags, boolean 
 			return i;
 		}
 	}
-	CONS_Alert(CONS_WARNING, M_GetText("No more free sound slots\n"));
+	I_Error("Out of Sound Freeslots while allocating \"%s\"\nLoad less addons to fix this.", name);
 	return 0;
 }
 

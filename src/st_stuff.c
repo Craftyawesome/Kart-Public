@@ -42,7 +42,11 @@
 
 #ifdef HAVE_BLUA
 #include "lua_hud.h"
+#include "lua_hudlib_drawlist.h"
+#include "lua_hook.h"
 #endif
+
+#include "r_fps.h"
 
 UINT16 objectsdrawn = 0;
 
@@ -175,6 +179,10 @@ hudinfo_t hudinfo[NUMHUDITEMS] =
 	{ 240, 160}, // HUD_LAP
 };
 
+#ifdef HAVE_BLUA
+static huddrawlist_h luahuddrawlist_game;
+#endif
+
 //
 // STATUS BAR CODE
 //
@@ -232,7 +240,7 @@ void ST_doPaletteStuff(void)
 	{
 		st_palette = palette;
 
-		if (rendermode != render_none)
+		if (rendermode == render_soft)
 		{
 			//V_SetPaletteLump(GetPalette()); // Reset the palette -- is this needed?
 			if (!splitscreen)
@@ -392,7 +400,10 @@ static inline void ST_Stop(void)
 	if (st_stopped)
 		return;
 
-	V_SetPalette(0);
+#ifdef HWRENDER
+	if (rendermode != render_opengl)
+#endif
+		V_SetPalette(0);
 
 	st_stopped = true;
 }
@@ -419,6 +430,10 @@ void ST_Init(void)
 		return;
 
 	ST_LoadGraphics();
+
+#ifdef HAVE_BLUA
+	luahuddrawlist_game = LUA_HUD_CreateDrawList();
+#endif
 }
 
 // change the status bar too, when pressing F12 while viewing a demo.
@@ -1949,8 +1964,13 @@ static void ST_overlayDrawer(void)
 
 #ifdef HAVE_BLUA
 	if (!(netgame || multiplayer) || !hu_showscores)
-		LUAh_GameHUD(stplyr);
-#endif
+	{
+		if (renderisnewtic)
+		{
+			LUAh_GameHUD(stplyr, luahuddrawlist_game);
+		}
+	}
+#endif // HAVE_BLUA
 
 	// draw level title Tails
 	if (*mapheaderinfo[gamemap-1]->lvlttl != '\0' && !(hu_showscores && (netgame || multiplayer) && !mapreset)
@@ -2008,16 +2028,16 @@ static void ST_overlayDrawer(void)
 			// SRB2kart: changed positions & text
 			if (splitscreen)
 			{
-				INT32 splitflags = K_calcSplitFlags(0);
-				V_DrawThinString(2, (BASEVIDHEIGHT/2)-20, V_YELLOWMAP|V_HUDTRANSHALF|splitflags, M_GetText("- SPECTATING -"));
+				INT32 splitflags = K_calcSplitFlags(V_SNAPTOBOTTOM|V_SNAPTOLEFT);
+				V_DrawThinString(2, (BASEVIDHEIGHT/2)-20, V_HUDTRANSHALF|V_YELLOWMAP|splitflags, M_GetText("- SPECTATING -"));
 				V_DrawThinString(2, (BASEVIDHEIGHT/2)-10, V_HUDTRANSHALF|splitflags, itemtxt);
 			}
 			else
 			{
-				V_DrawString(2, BASEVIDHEIGHT-40, V_HUDTRANSHALF|V_YELLOWMAP, M_GetText("- SPECTATING -"));
-				V_DrawString(2, BASEVIDHEIGHT-30, V_HUDTRANSHALF, itemtxt);
-				V_DrawString(2, BASEVIDHEIGHT-20, V_HUDTRANSHALF, M_GetText("Accelerate - Float"));
-				V_DrawString(2, BASEVIDHEIGHT-10, V_HUDTRANSHALF, M_GetText("Brake - Sink"));
+				V_DrawString(2, BASEVIDHEIGHT-40, V_SNAPTOBOTTOM|V_SNAPTOLEFT|V_HUDTRANSHALF|V_YELLOWMAP, M_GetText("- SPECTATING -"));
+				V_DrawString(2, BASEVIDHEIGHT-30, V_SNAPTOBOTTOM|V_SNAPTOLEFT|V_HUDTRANSHALF, itemtxt);
+				V_DrawString(2, BASEVIDHEIGHT-20, V_SNAPTOBOTTOM|V_SNAPTOLEFT|V_HUDTRANSHALF, M_GetText("Accelerate - Float"));
+				V_DrawString(2, BASEVIDHEIGHT-10, V_SNAPTOBOTTOM|V_SNAPTOLEFT|V_HUDTRANSHALF, M_GetText("Brake - Sink"));
 			}
 		}
 	}
@@ -2144,12 +2164,22 @@ void ST_Drawer(void)
 
 	if (st_overlay)
 	{
+#ifdef HAVE_BLUA
+		if (renderisnewtic)
+		{
+			LUA_HUD_ClearDrawList(luahuddrawlist_game);
+		}
+#endif // HAVE_BLUA
 		// No deadview!
 		for (i = 0; i <= splitscreen; i++)
 		{
 			stplyr = &players[displayplayers[i]];
 			ST_overlayDrawer();
 		}
+
+#ifdef HAVE_BLUA
+		LUA_HUD_DrawList(luahuddrawlist_game);
+#endif // HAVE_BLUA
 
 		// draw Midnight Channel's overlay ontop
 		if (mapheaderinfo[gamemap-1]->typeoflevel & TOL_TV)	// Very specific Midnight Channel stuff.

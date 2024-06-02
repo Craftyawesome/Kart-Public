@@ -105,8 +105,10 @@ rendermode_t rendermode = render_none;
 
 boolean highcolor = false;
 
+static void Impl_SetVsync(void);
+
 // synchronize page flipping with screen refresh
-consvar_t cv_vidwait = {"vid_wait", "Off", CV_SAVE, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_vidwait = {"vid_wait", "Off", CV_SAVE|CV_CALL|CV_NOINIT, CV_OnOff, Impl_SetVsync, 0, NULL, NULL, 0, 0, NULL};
 static consvar_t cv_stretch = {"stretch", "Off", CV_SAVE|CV_NOSHOWHELP, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL};
 
 UINT8 graphics_started = 0; // Is used in console.c and screen.c
@@ -657,8 +659,7 @@ static void Impl_HandleWindowEvent(SDL_WindowEvent evt)
 		// Tell game we got focus back, resume music if necessary
 		window_notinfocus = false;
 
-		if (!paused)
-			I_ResumeSong(); //resume it
+		S_InitMusicVolume();
 
 		if (cv_gamesounds.value)
 			S_EnableSound();
@@ -674,7 +675,7 @@ static void Impl_HandleWindowEvent(SDL_WindowEvent evt)
 		// Tell game we lost focus, pause music
 		window_notinfocus = true;
 		if (!cv_playmusicifunfocused.value)
-			I_PauseSong();
+			I_SetMusicVolume(0);
 		if (!cv_playsoundifunfocused.value)
 			S_DisableSound();
 
@@ -822,18 +823,18 @@ static void Impl_HandleMouseWheelEvent(SDL_MouseWheelEvent evt)
 	}
 }
 
-static void Impl_HandleJoystickAxisEvent(SDL_JoyAxisEvent evt)
+static void Impl_HandleControllerAxisEvent(SDL_ControllerAxisEvent evt)
 {
 	event_t event;
 	SDL_JoystickID joyid[4];
+	INT32 value;
 
 	// Determine the Joystick IDs for each current open joystick
-	joyid[0] = SDL_JoystickInstanceID(JoyInfo.dev);
-	joyid[1] = SDL_JoystickInstanceID(JoyInfo2.dev);
-	joyid[2] = SDL_JoystickInstanceID(JoyInfo3.dev);
-	joyid[3] = SDL_JoystickInstanceID(JoyInfo4.dev);
+	joyid[0] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo.dev));
+	joyid[1] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo2.dev));
+	joyid[2] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo3.dev));
+	joyid[3] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo4.dev));
 
-	evt.axis++;
 	event.data1 = event.data2 = event.data3 = INT32_MAX;
 
 	if (evt.which == joyid[0])
@@ -857,16 +858,35 @@ static void Impl_HandleJoystickAxisEvent(SDL_JoyAxisEvent evt)
 	if (evt.axis > JOYAXISSET*2)
 		return;
 	//vaule
-	if (evt.axis%2)
+	value = SDLJoyAxis(evt.value, event.type);
+	switch (evt.axis)
 	{
-		event.data1 = evt.axis / 2;
-		event.data2 = SDLJoyAxis(evt.value, event.type);
-	}
-	else
-	{
-		evt.axis--;
-		event.data1 = evt.axis / 2;
-		event.data3 = SDLJoyAxis(evt.value, event.type);
+		case SDL_CONTROLLER_AXIS_LEFTX:
+			event.data1 = 0;
+			event.data2 = value;
+			break;
+		case SDL_CONTROLLER_AXIS_LEFTY:
+			event.data1 = 0;
+			event.data3 = value;
+			break;
+		case SDL_CONTROLLER_AXIS_RIGHTX:
+			event.data1 = 1;
+			event.data2 = value;
+			break;
+		case SDL_CONTROLLER_AXIS_RIGHTY:
+			event.data1 = 1;
+			event.data3 = value;
+			break;
+		case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+			event.data1 = 2;
+			event.data2 = value;
+			break;
+		case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+			event.data1 = 2;
+			event.data3 = value;
+			break;
+		default:
+			return;
 	}
 	D_PostEvent(&event);
 }
@@ -898,16 +918,25 @@ static void Impl_HandleJoystickHatEvent(SDL_JoyHatEvent evt)
 }
 #endif
 
-static void Impl_HandleJoystickButtonEvent(SDL_JoyButtonEvent evt, Uint32 type)
+static void Impl_HandleControllerButtonEvent(SDL_ControllerButtonEvent evt, Uint32 type)
 {
 	event_t event;
 	SDL_JoystickID joyid[4];
 
 	// Determine the Joystick IDs for each current open joystick
-	joyid[0] = SDL_JoystickInstanceID(JoyInfo.dev);
-	joyid[1] = SDL_JoystickInstanceID(JoyInfo2.dev);
-	joyid[2] = SDL_JoystickInstanceID(JoyInfo3.dev);
-	joyid[3] = SDL_JoystickInstanceID(JoyInfo4.dev);
+	joyid[0] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo.dev));
+	joyid[1] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo2.dev));
+	joyid[2] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo3.dev));
+	joyid[3] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(JoyInfo4.dev));
+
+	if (evt.button == SDL_CONTROLLER_BUTTON_DPAD_UP
+		|| evt.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN
+		|| evt.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT
+		|| evt.button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT)
+	{
+		// dpad buttons are mapped as the hat instead
+		return;
+	}
 
 	if (evt.which == joyid[0])
 	{
@@ -926,11 +955,11 @@ static void Impl_HandleJoystickButtonEvent(SDL_JoyButtonEvent evt, Uint32 type)
 		event.data1 = KEY_4JOY1;
 	}
 	else return;
-	if (type == SDL_JOYBUTTONUP)
+	if (type == SDL_CONTROLLERBUTTONUP)
 	{
 		event.type = ev_keyup;
 	}
-	else if (type == SDL_JOYBUTTONDOWN)
+	else if (type == SDL_CONTROLLERBUTTONDOWN)
 	{
 		event.type = ev_keydown;
 	}
@@ -984,26 +1013,26 @@ void I_GetEvent(void)
 			case SDL_MOUSEWHEEL:
 				Impl_HandleMouseWheelEvent(evt.wheel);
 				break;
-			case SDL_JOYAXISMOTION:
-				Impl_HandleJoystickAxisEvent(evt.jaxis);
+			case SDL_CONTROLLERAXISMOTION:
+				Impl_HandleControllerAxisEvent(evt.caxis);
 				break;
 #if 0
 			case SDL_JOYHATMOTION:
 				Impl_HandleJoystickHatEvent(evt.jhat)
 				break;
 #endif
-			case SDL_JOYBUTTONUP:
-			case SDL_JOYBUTTONDOWN:
-				Impl_HandleJoystickButtonEvent(evt.jbutton, evt.type);
+			case SDL_CONTROLLERBUTTONUP:
+			case SDL_CONTROLLERBUTTONDOWN:
+				Impl_HandleControllerButtonEvent(evt.cbutton, evt.type);
 				break;
 
 			////////////////////////////////////////////////////////////
 
-			case SDL_JOYDEVICEADDED:
+			case SDL_CONTROLLERDEVICEADDED:
 				{
 					// OH BOY are you in for a good time! #abominationstation
 
-					SDL_Joystick *newjoy = SDL_JoystickOpen(evt.jdevice.which);
+					SDL_GameController *newcontroller = SDL_GameControllerOpen(evt.cdevice.which);
 
 					CONS_Debug(DBG_GAMELOGIC, "Joystick device index %d added\n", evt.jdevice.which + 1);
 
@@ -1022,10 +1051,10 @@ void I_GetEvent(void)
 					// PLAYER 1
 					//////////////////////////////
 
-					if (newjoy && (!JoyInfo.dev || !SDL_JoystickGetAttached(JoyInfo.dev))
-						&& JoyInfo2.dev != newjoy && JoyInfo3.dev != newjoy && JoyInfo4.dev != newjoy) // don't override a currently active device
+					if (newcontroller && (!JoyInfo.dev || !SDL_GameControllerGetAttached(JoyInfo.dev))
+						&& JoyInfo2.dev != newcontroller && JoyInfo3.dev != newcontroller && JoyInfo4.dev != newcontroller) // don't override a currently active device
 					{
-						cv_usejoystick.value = evt.jdevice.which + 1;
+						cv_usejoystick.value = evt.cdevice.which + 1;
 						I_UpdateJoystickDeviceIndices(1);
 					}
 
@@ -1033,10 +1062,10 @@ void I_GetEvent(void)
 					// PLAYER 2
 					//////////////////////////////
 
-					else if (newjoy && (!JoyInfo2.dev || !SDL_JoystickGetAttached(JoyInfo2.dev))
-						&& JoyInfo.dev != newjoy && JoyInfo3.dev != newjoy && JoyInfo4.dev != newjoy) // don't override a currently active device
+					else if (newcontroller && (!JoyInfo2.dev || !SDL_GameControllerGetAttached(JoyInfo2.dev))
+						&& JoyInfo.dev != newcontroller && JoyInfo3.dev != newcontroller && JoyInfo4.dev != newcontroller) // don't override a currently active device
 					{
-						cv_usejoystick2.value = evt.jdevice.which + 1;
+						cv_usejoystick2.value = evt.cdevice.which + 1;
 						I_UpdateJoystickDeviceIndices(2);
 					}
 
@@ -1044,10 +1073,10 @@ void I_GetEvent(void)
 					// PLAYER 3
 					//////////////////////////////
 
-					else if (newjoy && (!JoyInfo3.dev || !SDL_JoystickGetAttached(JoyInfo3.dev))
-						&& JoyInfo.dev != newjoy && JoyInfo2.dev != newjoy && JoyInfo4.dev != newjoy) // don't override a currently active device
+					else if (newcontroller && (!JoyInfo3.dev || !SDL_GameControllerGetAttached(JoyInfo3.dev))
+						&& JoyInfo.dev != newcontroller && JoyInfo2.dev != newcontroller && JoyInfo4.dev != newcontroller) // don't override a currently active device
 					{
-						cv_usejoystick3.value = evt.jdevice.which + 1;
+						cv_usejoystick3.value = evt.cdevice.which + 1;
 						I_UpdateJoystickDeviceIndices(3);
 					}
 
@@ -1055,10 +1084,10 @@ void I_GetEvent(void)
 					// PLAYER 4
 					//////////////////////////////
 
-					else if (newjoy && (!JoyInfo4.dev || !SDL_JoystickGetAttached(JoyInfo4.dev))
-						&& JoyInfo.dev != newjoy && JoyInfo2.dev != newjoy && JoyInfo3.dev != newjoy) // don't override a currently active device
+					else if (newcontroller && (!JoyInfo4.dev || !SDL_GameControllerGetAttached(JoyInfo4.dev))
+						&& JoyInfo.dev != newcontroller && JoyInfo2.dev != newcontroller && JoyInfo3.dev != newcontroller) // don't override a currently active device
 					{
-						cv_usejoystick4.value = evt.jdevice.which + 1;
+						cv_usejoystick4.value = evt.cdevice.which + 1;
 						I_UpdateJoystickDeviceIndices(4);
 					}
 
@@ -1113,33 +1142,33 @@ void I_GetEvent(void)
 					if (currentMenu == &OP_JoystickSetDef)
 						M_SetupJoystickMenu(0);
 
-					if (JoyInfo.dev != newjoy && JoyInfo2.dev != newjoy && JoyInfo3.dev != newjoy && JoyInfo4.dev != newjoy)
-						SDL_JoystickClose(newjoy);
+					if (JoyInfo.dev != newcontroller && JoyInfo2.dev != newcontroller && JoyInfo3.dev != newcontroller && JoyInfo4.dev != newcontroller)
+						SDL_GameControllerClose(newcontroller);
 				}
 				break;
 
 			////////////////////////////////////////////////////////////
 
-			case SDL_JOYDEVICEREMOVED:
-				if (JoyInfo.dev && !SDL_JoystickGetAttached(JoyInfo.dev))
+			case SDL_CONTROLLERDEVICEREMOVED:
+				if (JoyInfo.dev && !SDL_GameControllerGetAttached(JoyInfo.dev))
 				{
 					CONS_Debug(DBG_GAMELOGIC, "Joystick1 removed, device index: %d\n", JoyInfo.oldjoy);
 					I_ShutdownJoystick();
 				}
 
-				if (JoyInfo2.dev && !SDL_JoystickGetAttached(JoyInfo2.dev))
+				if (JoyInfo2.dev && !SDL_GameControllerGetAttached(JoyInfo2.dev))
 				{
 					CONS_Debug(DBG_GAMELOGIC, "Joystick2 removed, device index: %d\n", JoyInfo2.oldjoy);
 					I_ShutdownJoystick2();
 				}
 
-				if (JoyInfo3.dev && !SDL_JoystickGetAttached(JoyInfo3.dev))
+				if (JoyInfo3.dev && !SDL_GameControllerGetAttached(JoyInfo3.dev))
 				{
 					CONS_Debug(DBG_GAMELOGIC, "Joystick3 removed, device index: %d\n", JoyInfo3.oldjoy);
 					I_ShutdownJoystick3();
 				}
 
-				if (JoyInfo4.dev && !SDL_JoystickGetAttached(JoyInfo4.dev))
+				if (JoyInfo4.dev && !SDL_GameControllerGetAttached(JoyInfo4.dev))
 				{
 					CONS_Debug(DBG_GAMELOGIC, "Joystick4 removed, device index: %d\n", JoyInfo4.oldjoy);
 					I_ShutdownJoystick4();
@@ -1333,9 +1362,9 @@ void I_OsPolling(void)
 
 	if (consolevent)
 		I_GetConsoleEvents();
-	if (SDL_WasInit(SDL_INIT_JOYSTICK) == SDL_INIT_JOYSTICK)
+	if (SDL_WasInit(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) == (SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER))
 	{
-		SDL_JoystickUpdate();
+		SDL_GameControllerUpdate();
 		I_GetJoystickEvents();
 		I_GetJoystick2Events();
 		I_GetJoystick3Events();
@@ -1390,11 +1419,14 @@ void I_UpdateNoBlit(void)
 // from PrBoom's src/SDL/i_video.c
 static inline boolean I_SkipFrame(void)
 {
-#if 0
+#if 1
+	// While I fixed the FPS counter bugging out with this,
+	// I actually really like being able to pause and
+	// use perfstats to measure rendering performance
+	// without game logic changes.
+	return false;
+#else
 	static boolean skip = false;
-
-	if (rendermode != render_soft)
-		return false;
 
 	skip = !skip;
 
@@ -1410,16 +1442,19 @@ static inline boolean I_SkipFrame(void)
 			return false;
 	}
 #endif
-	return false;
 }
 
 //
 // I_FinishUpdate
 //
+static SDL_Rect src_rect = { 0, 0, 0, 0 };
+
 void I_FinishUpdate(void)
 {
 	if (rendermode == render_none)
 		return; //Alam: No software or OpenGl surface
+
+	SCR_CalculateFPS();
 
 	if (I_SkipFrame())
 		return;
@@ -1437,27 +1472,22 @@ void I_FinishUpdate(void)
 
 	if (rendermode == render_soft && screens[0])
 	{
-		SDL_Rect rect;
-
-		rect.x = 0;
-		rect.y = 0;
-		rect.w = vid.width;
-		rect.h = vid.height;
-
 		if (!bufSurface) //Double-Check
 		{
 			Impl_VideoSetupSDLBuffer();
 		}
+
 		if (bufSurface)
 		{
-			SDL_BlitSurface(bufSurface, NULL, vidSurface, &rect);
+			SDL_BlitSurface(bufSurface, &src_rect, vidSurface, &src_rect);
 			// Fury -- there's no way around UpdateTexture, the GL backend uses it anyway
 			SDL_LockSurface(vidSurface);
-			SDL_UpdateTexture(texture, &rect, vidSurface->pixels, vidSurface->pitch);
+			SDL_UpdateTexture(texture, &src_rect, vidSurface->pixels, vidSurface->pitch);
 			SDL_UnlockSurface(vidSurface);
 		}
+
 		SDL_RenderClear(renderer);
-		SDL_RenderCopy(renderer, texture, NULL, NULL);
+		SDL_RenderCopy(renderer, texture, &src_rect, NULL);
 		SDL_RenderPresent(renderer);
 	}
 
@@ -1467,6 +1497,7 @@ void I_FinishUpdate(void)
 		OglSdlFinishUpdate(cv_vidwait.value);
 	}
 #endif
+
 	exposevideo = SDL_FALSE;
 }
 
@@ -1660,6 +1691,27 @@ void VID_PrepareModeList(void)
 #endif
 }
 
+static UINT32 refresh_rate;
+static UINT32 VID_GetRefreshRate(void)
+{
+	int index = SDL_GetWindowDisplayIndex(window);
+	SDL_DisplayMode m;
+
+	if (SDL_WasInit(SDL_INIT_VIDEO) == 0)
+	{
+		// Video not init yet.
+		return 0;
+	}
+
+	if (SDL_GetCurrentDisplayMode(index, &m) != 0)
+	{
+		// Error has occurred.
+		return 0;
+	}
+
+	return m.refresh_rate;
+}
+
 INT32 VID_SetMode(INT32 modeNum)
 {
 	SDLdoUngrabMouse();
@@ -1703,6 +1755,11 @@ INT32 VID_SetMode(INT32 modeNum)
 			bufSurface = NULL;
 		}
 	}
+
+	src_rect.w = vid.width;
+	src_rect.h = vid.height;
+
+	refresh_rate = VID_GetRefreshRate();
 
 	return SDL_TRUE;
 }
@@ -1759,6 +1816,13 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 			flags |= SDL_RENDERER_SOFTWARE;
 		else if (cv_vidwait.value)
 			flags |= SDL_RENDERER_PRESENTVSYNC;
+
+		// 3 August 2022
+		// Possibly a Windows 11 issue; the default
+		// "direct3d" driver (D3D9) causes Drmingw exchndl
+		// to not write RPT files. Every other driver
+		// seems fine.
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
 
 		#ifdef __SWITCH__
 			flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
@@ -2099,5 +2163,23 @@ void I_ShutdownGraphics(void)
 #endif
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 	framebuffer = SDL_FALSE;
+}
+
+UINT32 I_GetRefreshRate(void)
+{
+	// Moved to VID_GetRefreshRate.
+	// Precalculating it like that won't work as
+	// well for windowed mode since you can drag
+	// the window around, but very slow PCs might have
+	// trouble querying mode over and over again.
+	return refresh_rate;
+}
+
+static void Impl_SetVsync(void)
+{
+#if SDL_VERSION_ATLEAST(2,0,18)
+	if (renderer)
+		SDL_RenderSetVSync(renderer, cv_vidwait.value);
+#endif
 }
 #endif

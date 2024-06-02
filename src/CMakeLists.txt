@@ -81,6 +81,7 @@ set(SRB2_CORE_HEADERS
 	i_sound.h
 	i_system.h
 	i_tcp.h
+	i_time.h
 	i_video.h
 	info.h
 	keys.h
@@ -118,6 +119,7 @@ set(SRB2_CORE_RENDER_SOURCES
 	r_bsp.c
 	r_data.c
 	r_draw.c
+	r_fps.c
 	r_main.c
 	r_plane.c
 	r_segs.c
@@ -129,6 +131,7 @@ set(SRB2_CORE_RENDER_SOURCES
 	r_data.h
 	r_defs.h
 	r_draw.h
+	r_fps.h
 	r_local.h
 	r_main.h
 	r_plane.h
@@ -158,6 +161,7 @@ set(SRB2_CORE_GAME_SOURCES
 	p_tick.c
 	p_user.c
 	k_kart.c
+	i_time.c
 
 	p_local.h
 	p_maputl.h
@@ -248,6 +252,7 @@ if(${SRB2_CONFIG_HAVE_BLUA})
 		lua_consolelib.c
 		lua_hooklib.c
 		lua_hudlib.c
+		lua_hudlib_drawlist.c
 		lua_infolib.c
 		lua_maplib.c
 		lua_mathlib.c
@@ -260,6 +265,7 @@ if(${SRB2_CONFIG_HAVE_BLUA})
 	set(SRB2_LUA_HEADERS
 		lua_hook.h
 		lua_hud.h
+		lua_hudlib_drawlist.h
 		lua_libs.h
 		lua_script.h
 	)
@@ -364,8 +370,9 @@ if(${SRB2_CONFIG_HAVE_DISCORDRPC})
 	if(${DISCORDRPC_FOUND})
 		set(SRB2_HAVE_DISCORDRPC ON)
 		add_definitions(-DHAVE_DISCORDRPC)
-		set(SRB2_DISCORDRPC_SOURCES discord.c)
-		set(SRB2_DISCORDRPC_HEADERS discord.h)
+		add_definitions(-DUSE_STUN)
+		set(SRB2_DISCORDRPC_SOURCES discord.c stun.c)
+		set(SRB2_DISCORDRPC_HEADERS discord.h stun.h)
 		prepend_sources(SRB2_DISCORDRPC_SOURCES)
 		prepend_sources(SRB2_DISCORDRPC_HEADERS)
 		source_group("Discord Rich Presence" FILES ${SRB2_DISCORDRPC_SOURCES} ${SRB2_DISCORDRPC_HEADERS})
@@ -513,6 +520,7 @@ if(${SRB2_CONFIG_USEASM})
 	endif()
 	set(SRB2_USEASM ON)
 	add_definitions(-DUSEASM)
+	set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -msse3 -mfpmath=sse)
 else()
 	set(SRB2_USEASM OFF)
 	add_definitions(-DNONX86 -DNORUSEASM)
@@ -544,10 +552,6 @@ add_definitions(-DCMAKECONFIG)
 #)
 
 add_subdirectory(sdl)
-
-if(${CMAKE_SYSTEM} MATCHES Windows)
-	add_subdirectory(win32)
-endif()
 
 if(NOT ${SRB2_SDL2_AVAILABLE} AND NOT ${SRB2_WIN32_AVAILABLE})
 	message(FATAL_ERROR "There are no targets available to build an SRB2Kart executable. :(")

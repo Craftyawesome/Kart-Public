@@ -38,6 +38,8 @@ static boolean MSUpdateAgain;
 
 static time_t  MSLastPing;
 
+static char *MSRules;
+
 #ifdef HAVE_THREADS
 static I_mutex MSMutex;
 static I_cond  MSCond;
@@ -68,12 +70,15 @@ static CV_PossibleValue_t masterserver_update_rate_cons_t[] = {
 };
 
 consvar_t cv_masterserver = {"masterserver", "https://ms.kartkrew.org/ms/api", CV_SAVE|CV_CALL, NULL, MasterServer_OnChange, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_rendezvousserver = {"holepunchserver", "relay.kartkrew.org", CV_SAVE, NULL, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_servername = {"servername", "SRB2Kart server", CV_SAVE|CV_CALL|CV_NOINIT, NULL, Update_parameters, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_server_contact = {"server_contact", "", CV_SAVE|CV_CALL|CV_NOINIT, NULL, Update_parameters, 0, NULL, NULL, 0, 0, NULL};
 
 consvar_t cv_masterserver_update_rate = {"masterserver_update_rate", "15", CV_SAVE|CV_CALL|CV_NOINIT, masterserver_update_rate_cons_t, MasterClient_Ticker, 0, NULL, NULL, 0, 0, NULL};
 
 consvar_t cv_advertise = {"advertise", "No", CV_NETVAR|CV_CALL|CV_NOINIT, CV_YesNo, Advertise_OnChange, 0, NULL, NULL, 0, 0, NULL};
+
+consvar_t cv_masterserver_nagattempts = {"masterserver_nagattempts", "5", CV_SAVE, CV_Unsigned, NULL, 0, NULL, NULL, 0, 0, NULL};
 
 #if defined (MASTERSERVER) && defined (HAVE_THREADS)
 int           ms_QueryId;
@@ -98,7 +103,9 @@ void AddMServCommands(void)
 	CV_RegisterVar(&cv_masterserver_timeout);
 	CV_RegisterVar(&cv_masterserver_debug);
 	CV_RegisterVar(&cv_masterserver_token);
+	CV_RegisterVar(&cv_masterserver_nagattempts);
 	CV_RegisterVar(&cv_advertise);
+	CV_RegisterVar(&cv_rendezvousserver);
 	CV_RegisterVar(&cv_servername);
 	CV_RegisterVar(&cv_server_contact);
 #ifdef MASTERSERVER
@@ -190,8 +197,15 @@ static void
 Finish_registration (void)
 {
 	int registered;
+	char *rules = GetMasterServerRules();
 
 	CONS_Printf("Registering this server on the master server...\n");
+
+	if (rules)
+	{
+		CONS_Printf("\n");
+		CONS_Alert(CONS_NOTICE, "%s\n", rules);
+	}
 
 	registered = HMS_register();
 
@@ -283,6 +297,22 @@ Finish_unlist (void)
 #ifdef HAVE_THREADS
 		I_wake_all_cond(&MSCond);
 #endif
+	}
+}
+
+static void
+Finish_masterserver_change (char *api)
+{
+	char rules[256];
+
+	HMS_set_api(api);
+
+	if (HMS_fetch_rules(rules, sizeof rules))
+	{
+		Lock_state();
+		Z_Free(MSRules);
+		MSRules = Z_StrDup(rules);
+		Unlock_state();
 	}
 }
 
@@ -379,7 +409,7 @@ Change_masterserver_thread (char *api)
 	}
 	Unlock_state();
 
-	HMS_set_api(api);
+	Finish_masterserver_change(api);
 }
 #endif/*HAVE_THREADS*/
 
@@ -426,10 +456,21 @@ void UnregisterServer(void)
 #endif/*MASTERSERVER*/
 }
 
+char *GetMasterServerRules(void)
+{
+	char *rules;
+
+	Lock_state();
+	rules = MSRules ? Z_StrDup(MSRules) : NULL;
+	Unlock_state();
+
+	return rules;
+}
+
 static boolean
 Online (void)
 {
-	return ( serverrunning && cv_advertise.value );
+	return ( serverrunning && netgame && cv_advertise.value );
 }
 
 static inline void SendPingToMasterServer(void)
@@ -476,7 +517,7 @@ Set_api (const char *api)
 			strdup(api)
 	);
 #else
-	HMS_set_api(strdup(api));
+	Finish_masterserver_change(strdup(api));
 #endif
 }
 
@@ -513,17 +554,6 @@ static void MasterServer_OnChange(void)
 #ifdef MASTERSERVER
 	UnregisterServer();
 
-	/*
-	TODO: remove this for v2, it's just a hack
-	for those coming in with an old config.
-	*/
-	if (
-			! cv_masterserver.changed &&
-			strcmp(cv_masterserver.string, "ms.srb2.org:28900") == 0
-	){
-		CV_StealthSet(&cv_masterserver, cv_masterserver.defaultvalue);
-	}
-
 	Set_api(cv_masterserver.string);
 
 	if (Online())
@@ -538,7 +568,7 @@ Advertise_OnChange(void)
 
 	if (cv_advertise.value)
 	{
-		if (serverrunning)
+		if (serverrunning && netgame)
 		{
 			Lock_state();
 			{
@@ -560,4 +590,9 @@ Advertise_OnChange(void)
 #ifdef HAVE_DISCORDRPC
 	DRPC_UpdatePresence();
 #endif
+
+	if (!dedicated)
+	{
+		M_PopupMasterServerRules();
+	}
 }

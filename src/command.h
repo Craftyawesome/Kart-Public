@@ -20,6 +20,14 @@
 // Command buffer & command execution
 //===================================
 
+/* Lua command registration flags. */
+enum
+{
+	COM_ADMIN       = 1,
+	COM_SPLITSCREEN = 2,
+	COM_LOCAL       = 4,
+};
+
 typedef void (*com_func_t)(void);
 
 void COM_AddCommand(const char *name, com_func_t func);
@@ -29,6 +37,8 @@ size_t COM_Argc(void);
 const char *COM_Argv(size_t arg); // if argv > argc, returns empty string
 char *COM_Args(void);
 size_t COM_CheckParm(const char *check); // like M_CheckParm :)
+size_t COM_CheckPartialParm(const char *check);
+size_t COM_FirstOption(void);
 
 // match existing command or NULL
 const char *COM_CompleteCommand(const char *partial, INT32 skips);

@@ -20,6 +20,7 @@
 #include "filesrch.h" // for refreshdirmenu
 #include "p_setup.h"
 #include "p_saveg.h"
+#include "i_time.h"
 #include "i_system.h"
 #include "am_map.h"
 #include "m_random.h"
@@ -50,6 +51,7 @@
 #include "m_cond.h" // condition sets
 #include "md5.h" // demo checksums
 #include "k_kart.h" // SRB2kart
+#include "r_fps.h" // frame interpolation/uncapped
 
 #ifdef HAVE_DISCORDRPC
 #include "discord.h"
@@ -262,7 +264,7 @@ boolean franticitems; // Frantic items currently enabled?
 boolean comeback; // Battle Mode's karma comeback is on/off
 
 // Voting system
-INT16 votelevels[5][2]; // Levels that were rolled by the host
+INT16 votelevels[4][2]; // Levels that were rolled by the host
 SINT8 votes[MAXPLAYERS]; // Each player's vote
 SINT8 pickedvote; // What vote the host rolls
 
@@ -275,6 +277,7 @@ tic_t mapreset; // Map reset delay when enough players have joined an empty game
 UINT8 nospectategrief; // How many players need to be in-game to eliminate last; for preventing spectate griefing
 boolean thwompsactive; // Thwomps activate on lap 2
 SINT8 spbplace; // SPB exists, give the person behind better items
+boolean startedInFreePlay; // Map was started in free play
 
 // Client-sided, unsynched variables (NEVER use in anything that needs to be synced with other players)
 boolean legitimateexit; // Did this client actually finish the match?
@@ -388,7 +391,7 @@ static CV_PossibleValue_t joyaxis_cons_t[] = {{0, "None"},
 {7, "LAnalog"}, {8, "RAnalog"}, {-7, "LAnalog-"}, {-8, "RAnalog-"},
 #endif
 #else
-{1, "X-Axis"}, {2, "Y-Axis"}, {-1, "X-Axis-"}, {-2, "Y-Axis-"},
+{1, "Left X"}, {2, "Left Y"}, {-1, "Left X-"}, {-2, "Left Y-"},
 #ifdef _arch_dreamcast
 {3, "R-Trig"}, {4, "L-Trig"}, {-3, "R-Trig-"}, {-4, "L-Trig-"},
 {5, "Alt X-Axis"}, {6, "Alt Y-Axis"}, {-5, "Alt X-Axis-"}, {-6, "Alt Y-Axis-"},
@@ -397,10 +400,10 @@ static CV_PossibleValue_t joyaxis_cons_t[] = {{0, "None"},
 {3, "Alt X-Axis"}, {4, "Alt Y-Axis"}, {-3, "Alt X-Axis-"}, {-4, "Alt Y-Axis-"},
 #else
 #if JOYAXISSET > 1
-{3, "Z-Axis"}, {4, "X-Rudder"}, {-3, "Z-Axis-"}, {-4, "X-Rudder-"},
+{3, "Right X"}, {4, "Right Y"}, {-3, "Right X-"}, {-4, "Right Y-"},
 #endif
 #if JOYAXISSET > 2
-{5, "Y-Rudder"}, {6, "Z-Rudder"}, {-5, "Y-Rudder-"}, {-6, "Z-Rudder-"},
+{5, "L Trigger"}, {6, "R Trigger"}, {-5, "L Trigger-"}, {-6, "R Trigger-"},
 #endif
 #if JOYAXISSET > 3
 {7, "U-Axis"}, {8, "V-Axis"}, {-7, "U-Axis-"}, {-8, "V-Axis-"},
@@ -418,7 +421,7 @@ static CV_PossibleValue_t joyaxis_cons_t[] = {{0, "None"},
 #endif
 #endif
 
-static CV_PossibleValue_t deadzone_cons_t[] = {{0, "MIN"}, {FRACUNIT, "MAX"}, {0, NULL}};
+static CV_PossibleValue_t deadzone_cons_t[] = {{FRACUNIT/16, "MIN"}, {FRACUNIT, "MAX"}, {0, NULL}};
 
 // don't mind me putting these here, I was lazy to figure out where else I could put those without blowing up the compiler.
 
@@ -483,64 +486,69 @@ consvar_t cv_useranalog3 = {"useranalog3", "Off", CV_SAVE|CV_CALL, CV_OnOff, Use
 consvar_t cv_useranalog4 = {"useranalog4", "Off", CV_SAVE|CV_CALL, CV_OnOff, UserAnalog4_OnChange, 0, NULL, NULL, 0, 0, NULL};
 #endif
 
-consvar_t cv_turnaxis = {"joyaxis_turn", "X-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_turnaxis = {"joyaxis_turn", "Left X", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_moveaxis = {"joyaxis_move", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_brakeaxis = {"joyaxis_brake", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_aimaxis = {"joyaxis_aim", "Y-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_aimaxis = {"joyaxis_aim", "Left Y", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_lookaxis = {"joyaxis_look", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #ifdef __SWITCH__
 consvar_t cv_fireaxis = {"joyaxis_fire", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_driftaxis = {"joyaxis_drift", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #else
-consvar_t cv_fireaxis = {"joyaxis_fire", "Z-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_driftaxis = {"joyaxis_drift", "Z-Rudder", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_fireaxis = {"joyaxis_fire", "L Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_driftaxis = {"joyaxis_drift", "R Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #endif
-consvar_t cv_deadzone = {"joy_deadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_lookbackaxis = {"joyaxis_lookback", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_xdeadzone = {"joy_xdeadzone", "0.3", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_ydeadzone = {"joy_ydeadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 
-
-consvar_t cv_turnaxis2 = {"joyaxis2_turn", "X-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_turnaxis2 = {"joyaxis2_turn", "Left X", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_moveaxis2 = {"joyaxis2_move", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_brakeaxis2 = {"joyaxis2_brake", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_aimaxis2 = {"joyaxis2_aim", "Y-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_aimaxis2 = {"joyaxis2_aim", "Left Y", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_lookaxis2 = {"joyaxis2_look", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #ifdef __SWITCH__
 consvar_t cv_fireaxis2 = {"joyaxis2_fire", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_driftaxis2 = {"joyaxis2_drift", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #else
-consvar_t cv_fireaxis2 = {"joyaxis2_fire", "Z-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_driftaxis2 = {"joyaxis2_drift", "Z-Rudder", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_fireaxis2 = {"joyaxis2_fire", "L Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_driftaxis2 = {"joyaxis2_drift", "R Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #endif
-consvar_t cv_deadzone2 = {"joy2_deadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_lookbackaxis2 = {"joyaxis2_lookback", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_xdeadzone2 = {"joy2_xdeadzone", "0.3", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_ydeadzone2 = {"joy2_ydeadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 
-
-consvar_t cv_turnaxis3 = {"joyaxis3_turn", "X-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_turnaxis3 = {"joyaxis3_turn", "Left X", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_moveaxis3 = {"joyaxis3_move", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_brakeaxis3 = {"joyaxis3_brake", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_aimaxis3 = {"joyaxis3_aim", "Y-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_aimaxis3 = {"joyaxis3_aim", "Left Y", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_lookaxis3 = {"joyaxis3_look", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #ifdef __SWITCH__
 consvar_t cv_fireaxis3 = {"joyaxis3_fire", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_driftaxis3 = {"joyaxis3_drift", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #else
-consvar_t cv_fireaxis3 = {"joyaxis3_fire", "Z-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_driftaxis3 = {"joyaxis3_drift", "Z-Rudder", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_fireaxis3 = {"joyaxis3_fire", "L Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_driftaxis3 = {"joyaxis3_drift", "R Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #endif
-consvar_t cv_deadzone3 = {"joy3_deadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_lookbackaxis3 = {"joyaxis3_lookback", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_xdeadzone3 = {"joy3_xdeadzone", "0.3", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_ydeadzone3 = {"joy3_ydeadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 
-
-consvar_t cv_turnaxis4 = {"joyaxis4_turn", "X-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_turnaxis4 = {"joyaxis4_turn", "Left X", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_moveaxis4 = {"joyaxis4_move", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_brakeaxis4 = {"joyaxis4_brake", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_aimaxis4 = {"joyaxis4_aim", "Y-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_aimaxis4 = {"joyaxis4_aim", "Left Y", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_lookaxis4 = {"joyaxis4_look", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #ifdef __SWITCH__
 consvar_t cv_fireaxis4 = {"joyaxis4_fire", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_driftaxis4 = {"joyaxis4_drift", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #else
-consvar_t cv_fireaxis4 = {"joyaxis4_fire", "Z-Axis", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
-consvar_t cv_driftaxis4 = {"joyaxis4_drift", "Z-Rudder", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_fireaxis4 = {"joyaxis4_fire", "L Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_driftaxis4 = {"joyaxis4_drift", "R Trigger", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 #endif
-consvar_t cv_deadzone4 = {"joy4_deadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_lookbackaxis4 = {"joyaxis4_lookback", "None", CV_SAVE, joyaxis_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_xdeadzone4 = {"joy4_xdeadzone", "0.3", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
+consvar_t cv_ydeadzone4 = {"joy4_ydeadzone", "0.5", CV_FLOAT|CV_SAVE, deadzone_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 
 
 #if MAXPLAYERS > 16
@@ -926,6 +934,9 @@ static INT32 Joy1Axis(axis_input_e axissel)
 		case AXISDRIFT:
 			axisval = cv_driftaxis.value;
 			break;
+		case AXISLOOKBACK:
+			axisval = cv_lookbackaxis.value;
+			break;
 		default:
 			return 0;
 	}
@@ -950,31 +961,44 @@ static INT32 Joy1Axis(axis_input_e axissel)
 	{
 		axisval /= 2;
 		retaxis = joyxmove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_xdeadzone.value) >> FRACBITS;
+			if (abs(retaxis) <= jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
 	}
 	else
 	{
 		axisval--;
 		axisval /= 2;
 		retaxis = joyymove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_ydeadzone.value) >> FRACBITS;
+			if (abs(retaxis) <= jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
 	}
+}
 
 #ifdef _arch_dreamcast
 	skipDC:
 #endif
-
-	if (retaxis < (-JOYAXISRANGE))
-		retaxis = -JOYAXISRANGE;
-	if (retaxis > (+JOYAXISRANGE))
-		retaxis = +JOYAXISRANGE;
-	if (!Joystick.bGamepadStyle && axissel < AXISDEAD)
-	{
-		const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_deadzone.value) >> FRACBITS;
-		if (abs(retaxis) <= jdeadzone)
-			return 0;
-	}
-	if (flp) retaxis = -retaxis; //flip it around
-	return retaxis;
-}
 
 static INT32 Joy2Axis(axis_input_e axissel)
 {
@@ -1006,10 +1030,12 @@ static INT32 Joy2Axis(axis_input_e axissel)
 		case AXISDRIFT:
 			axisval = cv_driftaxis2.value;
 			break;
+		case AXISLOOKBACK:
+			axisval = cv_lookbackaxis2.value;
+			break;
 		default:
 			return 0;
 	}
-
 
 	if (axisval < 0) //odd -axises
 	{
@@ -1031,31 +1057,46 @@ static INT32 Joy2Axis(axis_input_e axissel)
 	{
 		axisval /= 2;
 		retaxis = joy2xmove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick2.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_xdeadzone2.value) >> FRACBITS;
+			if (-jdeadzone < retaxis && retaxis < jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
+
 	}
 	else
 	{
 		axisval--;
 		axisval /= 2;
 		retaxis = joy2ymove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick2.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_ydeadzone2.value) >> FRACBITS;
+			if (-jdeadzone < retaxis && retaxis < jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
+
 	}
+}
 
 #ifdef _arch_dreamcast
 	skipDC:
 #endif
-
-	if (retaxis < (-JOYAXISRANGE))
-		retaxis = -JOYAXISRANGE;
-	if (retaxis > (+JOYAXISRANGE))
-		retaxis = +JOYAXISRANGE;
-	if (!Joystick2.bGamepadStyle && axissel < AXISDEAD)
-	{
-		const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_deadzone2.value) >> FRACBITS;
-		if (-jdeadzone < retaxis && retaxis < jdeadzone)
-			return 0;
-	}
-	if (flp) retaxis = -retaxis; //flip it around
-	return retaxis;
-}
 
 static INT32 Joy3Axis(axis_input_e axissel)
 {
@@ -1087,10 +1128,12 @@ static INT32 Joy3Axis(axis_input_e axissel)
 		case AXISDRIFT:
 			axisval = cv_driftaxis3.value;
 			break;
+		case AXISLOOKBACK:
+			axisval = cv_lookbackaxis3.value;
+			break;
 		default:
 			return 0;
 	}
-
 
 	if (axisval < 0) //odd -axises
 	{
@@ -1112,31 +1155,46 @@ static INT32 Joy3Axis(axis_input_e axissel)
 	{
 		axisval /= 2;
 		retaxis = joy3xmove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick3.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_xdeadzone3.value) >> FRACBITS;
+			if (-jdeadzone < retaxis && retaxis < jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
+		
 	}
 	else
 	{
 		axisval--;
 		axisval /= 2;
 		retaxis = joy3ymove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick3.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_ydeadzone3.value) >> FRACBITS;
+			if (-jdeadzone < retaxis && retaxis < jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
+		
 	}
+}
 
 #ifdef _arch_dreamcast
 	skipDC:
 #endif
-
-	if (retaxis < (-JOYAXISRANGE))
-		retaxis = -JOYAXISRANGE;
-	if (retaxis > (+JOYAXISRANGE))
-		retaxis = +JOYAXISRANGE;
-	if (!Joystick3.bGamepadStyle && axissel < AXISDEAD)
-	{
-		const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_deadzone3.value) >> FRACBITS;
-		if (-jdeadzone < retaxis && retaxis < jdeadzone)
-			return 0;
-	}
-	if (flp) retaxis = -retaxis; //flip it around
-	return retaxis;
-}
 
 static INT32 Joy4Axis(axis_input_e axissel)
 {
@@ -1168,6 +1226,9 @@ static INT32 Joy4Axis(axis_input_e axissel)
 		case AXISDRIFT:
 			axisval = cv_driftaxis4.value;
 			break;
+		case AXISLOOKBACK:
+			axisval = cv_lookbackaxis4.value;
+			break;
 		default:
 			return 0;
 	}
@@ -1192,31 +1253,46 @@ static INT32 Joy4Axis(axis_input_e axissel)
 	{
 		axisval /= 2;
 		retaxis = joy4xmove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick4.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_xdeadzone4.value) >> FRACBITS;
+			if (-jdeadzone < retaxis && retaxis < jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
+		
 	}
 	else
 	{
 		axisval--;
 		axisval /= 2;
 		retaxis = joy4ymove[axisval];
+
+		if (retaxis < (-JOYAXISRANGE))
+			retaxis = -JOYAXISRANGE;
+		if (retaxis > (+JOYAXISRANGE))
+			retaxis = +JOYAXISRANGE;
+		if (!Joystick4.bGamepadStyle && axissel < AXISDEAD)
+		{
+			const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_ydeadzone4.value) >> FRACBITS;
+			if (-jdeadzone < retaxis && retaxis < jdeadzone)
+				return 0;
+		}
+		if (flp) retaxis = -retaxis; //flip it around
+		return retaxis;
+		
 	}
+}
 
 #ifdef _arch_dreamcast
 	skipDC:
 #endif
-
-	if (retaxis < (-JOYAXISRANGE))
-		retaxis = -JOYAXISRANGE;
-	if (retaxis > (+JOYAXISRANGE))
-		retaxis = +JOYAXISRANGE;
-	if (!Joystick4.bGamepadStyle && axissel < AXISDEAD)
-	{
-		const INT32 jdeadzone = ((JOYAXISRANGE-1) * cv_deadzone4.value) >> FRACBITS;
-		if (-jdeadzone < retaxis && retaxis < jdeadzone)
-			return 0;
-	}
-	if (flp) retaxis = -retaxis; //flip it around
-	return retaxis;
-}
 
 boolean InputDown(INT32 gc, UINT8 p)
 {
@@ -1603,7 +1679,8 @@ void G_BuildTiccmd(ticcmd_t *cmd, INT32 realtics, UINT8 ssplayer)
 		keyboard_look[ssplayer-1] = kbl;
 		turnheld[ssplayer-1] = th;
 		resetdown[ssplayer-1] = rd;
-		camspin[ssplayer-1] = InputDown(gc_lookback, ssplayer);
+		axis = JoyAxis(AXISLOOKBACK, ssplayer);
+		camspin[ssplayer-1] = (InputDown(gc_lookback, ssplayer) || (usejoystick && axis > 0));
 	}
 
 	/* 	Lua: Allow this hook to overwrite ticcmd.
@@ -2505,7 +2582,9 @@ void G_Ticker(boolean run)
 		if (G_GametypeHasSpectators()
 			&& (gamestate == GS_LEVEL || gamestate == GS_INTERMISSION || gamestate == GS_VOTING // definitely good
 			|| gamestate == GS_WAITINGPLAYERS)) // definitely a problem if we don't do it at all in this gamestate, but might need more protection?
+		{
 			K_CheckSpectateStatus();
+		}
 
 		if (pausedelay)
 			pausedelay--;
@@ -2626,6 +2705,9 @@ void G_PlayerReborn(INT32 player)
 	INT32 wanted;
 	INT32 respawnflip;
 	boolean songcredit = false;
+	tic_t spectatorreentry;
+	tic_t grieftime;
+	UINT8 griefstrikes;
 
 	score = players[player].score;
 	marescore = players[player].marescore;
@@ -2667,7 +2749,7 @@ void G_PlayerReborn(INT32 player)
 	pity = players[player].pity;
 
 	// SRB2kart
-	if (leveltime <= starttime)
+	if (leveltime <= starttime || spectator == true)
 	{
 		itemroulette = 0;
 		roulettetype = 0;
@@ -2678,6 +2760,14 @@ void G_PlayerReborn(INT32 player)
 		comebackpoints = 0;
 		wanted = 0;
 		starpostwp = 0;
+
+		starposttime = 0;
+		starpostx = 0;
+		starposty = 0;
+		starpostz = 0;
+		starpostnum = 0;
+		respawnflip = 0;
+		starpostangle = 0;
 	}
 	else
 	{
@@ -2707,6 +2797,11 @@ void G_PlayerReborn(INT32 player)
 		comebackpoints = players[player].kartstuff[k_comebackpoints];
 		wanted = players[player].kartstuff[k_wanted];
 	}
+
+	spectatorreentry = players[player].spectatorreentry;
+
+	grieftime = players[player].grieftime;
+	griefstrikes = players[player].griefstrikes;
 
 	p = &players[player];
 	memset(p, 0, sizeof (*p));
@@ -2760,6 +2855,10 @@ void G_PlayerReborn(INT32 player)
 	p->kartstuff[k_wanted] = wanted;
 	p->kartstuff[k_eggmanblame] = -1;
 	p->kartstuff[k_starpostflip] = respawnflip;
+
+	p->spectatorreentry = spectatorreentry;
+	p->grieftime = grieftime;
+	p->griefstrikes = griefstrikes;
 
 	// Don't do anything immediately
 	p->pflags |= PF_USEDOWN;
@@ -3260,7 +3359,9 @@ void G_DoReborn(INT32 playernum)
 		// respawn at the start
 		mobj_t *oldmo = NULL;
 
-		if (player->starpostnum || ((mapheaderinfo[gamemap - 1]->levelflags & LF_SECTIONRACE) && player->laps)) // SRB2kart
+		if (player->spectator)
+			;
+		else if (player->starpostnum || ((mapheaderinfo[gamemap - 1]->levelflags & LF_SECTIONRACE) && player->laps)) // SRB2kart
 			starpost = true;
 
 		// first dissasociate the corpse
@@ -3422,42 +3523,47 @@ boolean G_BattleGametype(void)
 //
 // Oh, yeah, and we sometimes flip encore mode on here too.
 //
-INT16 G_SometimesGetDifferentGametype(void)
+UINT8 G_SometimesGetDifferentGametype(UINT8 prefgametype)
 {
-	boolean encorepossible = (M_SecretUnlocked(SECRET_ENCORE) && G_RaceGametype());
+	// Most of the gametype references in this condition are intentionally not prefgametype.
+	// This is so a server CAN continue playing a gametype if they like the taste of it.
+	// The encore check needs prefgametype so can't use G_RaceGametype...
+	boolean encorepossible = (M_SecretUnlocked(SECRET_ENCORE)
+		&& (gametype == GT_RACE || prefgametype == GT_RACE));
+	boolean encoreactual = false;
+	UINT8 encoremodifier = 0;
+
+	if (encorepossible)
+	{
+		switch (cv_kartvoterulechanges.value)
+		{
+			case 3: // always
+				encoreactual = true;
+				break;
+			case 2: // frequent
+				encoreactual = M_RandomChance(FRACUNIT>>1);
+				break;
+			case 1: // sometimes
+				encoreactual = M_RandomChance(FRACUNIT>>2);
+				break;
+			default:
+				break;
+		}
+		if (encoreactual != (boolean)cv_kartencore.value)
+			encoremodifier = 0x80;
+	}
 
 	if (!cv_kartvoterulechanges.value) // never
-		return gametype;
+		return (gametype|encoremodifier);
 
-	if (randmapbuffer[NUMMAPS] > 0 && (encorepossible || cv_kartvoterulechanges.value != 3))
+	if (randmapbuffer[NUMMAPS] > 0 && (cv_kartvoterulechanges.value != 3)) // used to be (encorepossible || rule changes != 3)
 	{
 		randmapbuffer[NUMMAPS]--;
-		if (encorepossible)
-		{
-			switch (cv_kartvoterulechanges.value)
-			{
-				case 3: // always
-					randmapbuffer[NUMMAPS] = 0; // gotta prep this in case it isn't already set
-					break;
-				case 2: // frequent
-					encorepossible = M_RandomChance(FRACUNIT>>1);
-					break;
-				case 1: // sometimes
-				default:
-					encorepossible = M_RandomChance(FRACUNIT>>2);
-					break;
-			}
-			if (encorepossible != (boolean)cv_kartencore.value)
-				return (gametype|0x80);
-		}
-		return gametype;
+		return (gametype|encoremodifier);
 	}
 
 	switch (cv_kartvoterulechanges.value) // okay, we're having a gametype change! when's the next one, luv?
 	{
-		case 3: // always
-			randmapbuffer[NUMMAPS] = 1; // every other vote (or always if !encorepossible)
-			break;
 		case 1: // sometimes
 			randmapbuffer[NUMMAPS] = 5; // per "cup"
 			break;
@@ -3468,9 +3574,16 @@ INT16 G_SometimesGetDifferentGametype(void)
 			break;
 	}
 
-	if (gametype == GT_MATCH)
-		return GT_RACE;
-	return GT_MATCH;
+	// Only this response is prefgametype-based.
+	if (prefgametype == GT_MATCH)
+	{
+		// Intentionally does not use encoremodifier!
+		if (cv_kartencore.value)
+			return (GT_RACE|0x80);
+		return (GT_RACE);
+	}
+	// This might appear wrong HERE, but the game will display the Encore possibility on the second voting choice instead.
+	return (GT_MATCH|encoremodifier);
 }
 
 //
@@ -4737,6 +4850,9 @@ char *G_BuildMapTitle(INT32 mapnum)
 	if (mapnum == 0)
 		return Z_StrDup("Random");
 
+	if (!mapheaderinfo[mapnum-1])
+		P_AllocMapHeader(mapnum-1);
+
 	if (strcmp(mapheaderinfo[mapnum-1]->lvlttl, ""))
 	{
 		size_t len = 1;
@@ -4768,6 +4884,242 @@ char *G_BuildMapTitle(INT32 mapnum)
 	}
 
 	return title;
+}
+
+static void measurekeywords(mapsearchfreq_t *fr,
+		struct searchdim **dimp, UINT8 *cuntp,
+		const char *s, const char *q, boolean wanttable)
+{
+	char *qp;
+	char *sp;
+	if (wanttable)
+		(*dimp) = Z_Realloc((*dimp), 255 * sizeof (struct searchdim),
+				PU_STATIC, NULL);
+	for (qp = strtok(va("%s", q), " ");
+			qp && fr->total < 255;
+			qp = strtok(0, " "))
+	{
+		if (( sp = strcasestr(s, qp) ))
+		{
+			if (wanttable)
+			{
+				(*dimp)[(*cuntp)].pos = sp - s;
+				(*dimp)[(*cuntp)].siz = strlen(qp);
+			}
+			(*cuntp)++;
+			fr->total++;
+		}
+	}
+	if (wanttable)
+		(*dimp) = Z_Realloc((*dimp), (*cuntp) * sizeof (struct searchdim),
+				PU_STATIC, NULL);
+}
+
+static void writesimplefreq(mapsearchfreq_t *fr, INT32 *frc,
+		INT32 mapnum, UINT8 pos, UINT8 siz)
+{
+	fr[(*frc)].mapnum = mapnum;
+	fr[(*frc)].matchd = ZZ_Alloc(sizeof (struct searchdim));
+	fr[(*frc)].matchd[0].pos = pos;
+	fr[(*frc)].matchd[0].siz = siz;
+	fr[(*frc)].matchc = 1;
+	fr[(*frc)].total = 1;
+	(*frc)++;
+}
+
+INT32 G_FindMap(const char *mapname, char **foundmapnamep,
+		mapsearchfreq_t **freqp, INT32 *freqcp)
+{
+	INT32 newmapnum = 0;
+	INT32 mapnum;
+	INT32 apromapnum = 0;
+
+	size_t      mapnamelen;
+	char   *realmapname = NULL;
+	char   *newmapname = NULL;
+	char   *apromapname = NULL;
+	char   *aprop = NULL;
+
+	mapsearchfreq_t *freq;
+	boolean wanttable;
+	INT32 freqc;
+	UINT8 frequ;
+
+	INT32 i;
+
+	mapnamelen = strlen(mapname);
+
+	/* Count available maps; how ugly. */
+	for (i = 0, freqc = 0; i < NUMMAPS; ++i)
+	{
+		if (mapheaderinfo[i])
+			freqc++;
+	}
+
+	freq = ZZ_Calloc(freqc * sizeof (mapsearchfreq_t));
+
+	wanttable = !!( freqp );
+
+	freqc = 0;
+	for (i = 0, mapnum = 1; i < NUMMAPS; ++i, ++mapnum)
+		if (mapheaderinfo[i])
+	{
+		if (!( realmapname = G_BuildMapTitle(mapnum) ))
+			continue;
+
+		aprop = realmapname;
+
+		/* Now that we found a perfect match no need to fucking guess. */
+		if (strnicmp(realmapname, mapname, mapnamelen) == 0)
+		{
+			if (wanttable)
+			{
+				writesimplefreq(freq, &freqc, mapnum, 0, mapnamelen);
+			}
+			if (newmapnum == 0)
+			{
+				newmapnum = mapnum;
+				newmapname = realmapname;
+				realmapname = 0;
+				Z_Free(apromapname);
+				if (!wanttable)
+					break;
+			}
+		}
+		else
+		if (apromapnum == 0 || wanttable)
+		{
+			/* LEVEL 1--match keywords verbatim */
+			if (( aprop = strcasestr(realmapname, mapname) ))
+			{
+				if (wanttable)
+				{
+					writesimplefreq(freq, &freqc,
+							mapnum, aprop - realmapname, mapnamelen);
+				}
+				if (apromapnum == 0)
+				{
+					apromapnum = mapnum;
+					apromapname = realmapname;
+					realmapname = 0;
+				}
+			}
+			else/* ...match individual keywords */
+			{
+				freq[freqc].mapnum = mapnum;
+				measurekeywords(&freq[freqc],
+						&freq[freqc].matchd, &freq[freqc].matchc,
+						realmapname, mapname, wanttable);
+				if (freq[freqc].total)
+					freqc++;
+			}
+		}
+
+		Z_Free(realmapname);/* leftover old name */
+	}
+
+	if (newmapnum == 0)/* no perfect match--try a substring */
+	{
+		newmapnum = apromapnum;
+		newmapname = apromapname;
+	}
+
+	if (newmapnum == 0)/* calculate most queries met! */
+	{
+		frequ = 0;
+		for (i = 0; i < freqc; ++i)
+		{
+			if (freq[i].total > frequ)
+			{
+				frequ = freq[i].total;
+				newmapnum = freq[i].mapnum;
+			}
+		}
+		if (newmapnum)
+		{
+			newmapname = G_BuildMapTitle(newmapnum);
+		}
+	}
+
+	if (freqp)
+		(*freqp) = freq;
+	else
+		Z_Free(freq);
+
+	if (freqcp)
+		(*freqcp) = freqc;
+
+	if (foundmapnamep)
+		(*foundmapnamep) = newmapname;
+	else
+		Z_Free(newmapname);
+
+	return newmapnum;
+}
+
+void G_FreeMapSearch(mapsearchfreq_t *freq, INT32 freqc)
+{
+	INT32 i;
+	for (i = 0; i < freqc; ++i)
+	{
+		Z_Free(freq[i].matchd);
+	}
+	Z_Free(freq);
+}
+
+INT32 G_FindMapByNameOrCode(const char *mapname, char **realmapnamep)
+{
+	boolean usemapcode = false;
+
+	INT32 newmapnum;
+
+	size_t mapnamelen;
+
+	char *p;
+
+	mapnamelen = strlen(mapname);
+
+	if (mapnamelen == 2)/* maybe two digit code */
+	{
+		if (( newmapnum = M_MapNumber(mapname[0], mapname[1]) ))
+			usemapcode = true;
+	}
+	else if (mapnamelen == 5 && strnicmp(mapname, "MAP", 3) == 0)
+	{
+		if (( newmapnum = M_MapNumber(mapname[3], mapname[4]) ))
+			usemapcode = true;
+	}
+
+	if (!usemapcode)
+	{
+		/* Now detect map number in base 10, which no one asked for. */
+		newmapnum = strtol(mapname, &p, 10);
+		if (*p == '\0')/* we got it */
+		{
+			if (newmapnum < 1 || newmapnum > NUMMAPS)
+			{
+				CONS_Alert(CONS_ERROR, M_GetText("Invalid map number %d.\n"), newmapnum);
+				return 0;
+			}
+			usemapcode = true;
+		}
+		else
+		{
+			newmapnum = G_FindMap(mapname, realmapnamep, NULL, NULL);
+		}
+	}
+
+	if (usemapcode)
+	{
+		/* we can't check mapheaderinfo for this hahahaha */
+		if (W_CheckNumForName(G_BuildMapName(newmapnum)) == LUMPERROR)
+			return 0;
+
+		if (realmapnamep)
+			(*realmapnamep) = G_BuildMapTitle(newmapnum);
+	}
+
+	return newmapnum;
 }
 
 //
@@ -6151,7 +6503,7 @@ void G_ReadMetalTic(mobj_t *metal)
 	// Read changes from the tic
 	if (ziptic & GZT_XYZ)
 	{
-		P_TeleportMove(metal, READFIXED(metal_p), READFIXED(metal_p), READFIXED(metal_p));
+		P_MoveOrigin(metal, READFIXED(metal_p), READFIXED(metal_p), READFIXED(metal_p));
 		oldmetal.x = metal->x;
 		oldmetal.y = metal->y;
 		oldmetal.z = metal->z;
@@ -6402,7 +6754,7 @@ void G_BeginRecording(void)
 		demoflags |= DF_ENCORE;
 
 #ifdef HAVE_BLUA
-	if (!modeattacking)	// Ghosts don't read luavars, and you shouldn't ever need to save Lua in replays, you doof!
+	if (!modeattacking && gL)	// Ghosts don't read luavars, and you shouldn't ever need to save Lua in replays, you doof!
 						// SERIOUSLY THOUGH WHY WOULD YOU LOAD HOSTMOD AND RECORD A GHOST WITH IT !????
 		demoflags |= DF_LUAVARS;
 #endif
@@ -6437,7 +6789,7 @@ void G_BeginRecording(void)
 		if (wadfiles[i]->important)
 	{
 		nameonly(( filename = va("%s", wadfiles[i]->filename) ));
-		WRITESTRINGN(demo_p, filename, 64);
+		WRITESTRINGL(demo_p, filename, MAX_WADPATH);
 		WRITEMEM(demo_p, wadfiles[i]->md5sum, 16);
 
 		totalfiles++;
@@ -6511,7 +6863,7 @@ void G_BeginRecording(void)
 
 #ifdef HAVE_BLUA
 	// player lua vars, always saved even if empty... Unless it's record attack.
-	if (!modeattacking)
+	if (demoflags & DF_LUAVARS)
 		LUA_ArchiveDemo();
 #endif
 
@@ -6682,10 +7034,13 @@ static void G_LoadDemoExtraFiles(UINT8 **pp)
 			}
 			else
 			{
-				P_AddWadFile(filename);
+				P_PartialAddWadFile(filename);
 			}
 		}
 	}
+
+	if (P_PartialAddGetStage() >= 0)
+		P_MultiSetupWadFiles(true); // in case any partial adds were done
 }
 
 static void G_SkipDemoExtraFiles(UINT8 **pp)
@@ -8264,7 +8619,7 @@ boolean G_CheckDemoStatus(void)
 		CONS_Printf(M_GetText("timed %u gametics in %d realtics\n%f seconds, %f avg fps\n"), leveltime,demotime,f1/TICRATE,f2/f1);
 		if (restorecv_vidwait != cv_vidwait.value)
 			CV_SetValue(&cv_vidwait, restorecv_vidwait);
-		D_AdvanceDemo();
+		D_StartTitle();
 		return true;
 	}
 
@@ -8282,7 +8637,7 @@ boolean G_CheckDemoStatus(void)
 			if (modeattacking)
 				M_EndModeAttackRun();
 			else
-				D_AdvanceDemo();
+				D_StartTitle();
 		}
 
 		return true;

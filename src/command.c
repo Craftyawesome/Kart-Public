@@ -353,6 +353,40 @@ size_t COM_CheckParm(const char *check)
 	return 0;
 }
 
+/** \brief COM_CheckParm, but checks only the start of each argument.
+  *        E.g. checking for "-no" would match "-noerror" too.
+  */
+size_t COM_CheckPartialParm(const char *check)
+{
+	int  len;
+	size_t i;
+
+	len = strlen(check);
+
+	for (i = 1; i < com_argc; i++)
+	{
+		if (strncasecmp(check, com_argv[i], len) == 0)
+			return i;
+	}
+	return 0;
+}
+
+/** Find the first argument that starts with a hyphen (-).
+  * \return The index of the argument, or 0
+  *         if there are no such arguments.
+  */
+size_t COM_FirstOption(void)
+{
+	size_t i;
+
+	for (i = 1; i < com_argc; i++)
+	{
+		if (com_argv[i][0] == '-')/* options start with a hyphen */
+			return i;
+	}
+	return 0;
+}
+
 /** Parses a string into command-line tokens.
   *
   * \param ptext A null-terminated string. Does not need to be
@@ -1231,7 +1265,7 @@ static void Setvalue(consvar_t *var, const char *valstr, boolean stealth)
 
 			// search for other
 			for (i = MAXVAL+1; var->PossibleValue[i].strvalue; i++)
-				if (!stricmp(var->PossibleValue[i].strvalue, valstr))
+				if (v == var->PossibleValue[i].value || !stricmp(var->PossibleValue[i].strvalue, valstr))
 				{
 					var->value = var->PossibleValue[i].value;
 					var->string = var->PossibleValue[i].strvalue;
@@ -1533,6 +1567,15 @@ static void CV_SetCVar(consvar_t *var, const char *value, boolean stealth)
 			return;
 		}
 
+		if (var == &cv_kartspeed && !M_SecretUnlocked(SECRET_HARDSPEED))
+		{
+			if (!stricmp(value, "Hard") || atoi(value) == 2)
+			{
+				CONS_Printf(M_GetText("You haven't unlocked this yet!\n"));
+				return;
+			}
+		}
+
 		// Only add to netcmd buffer if in a netgame, otherwise, just change it.
 		if (netgame || multiplayer)
 		{
@@ -1616,6 +1659,9 @@ void CV_AddValue(consvar_t *var, INT32 increment)
 {
 	INT32 newvalue, max;
 
+	if (!increment)
+		return;
+
 	// count pointlimit better
 	/*if (var == &cv_pointlimit && (gametype == GT_MATCH))
 		increment *= 50;*/
@@ -1628,7 +1674,6 @@ void CV_AddValue(consvar_t *var, INT32 increment)
 			// Special case for the nextmap variable, used only directly from the menu
 			INT32 oldvalue = var->value - 1, gt;
 			gt = cv_newgametype.value;
-			if (increment != 0) // Going up!
 			{
 				newvalue = var->value - 1;
 				do
@@ -1670,21 +1715,35 @@ void CV_AddValue(consvar_t *var, INT32 increment)
 			{
 				INT32 currentindice = -1, newindice;
 				for (max = MAXVAL+1; var->PossibleValue[max].strvalue; max++)
-					if (var->PossibleValue[max].value == var->value)
-						currentindice = max;
-
-				if (currentindice == -1 && max != MAXVAL+1)
-					newindice = ((increment > 0) ? MAXVAL : max) + increment;
-				else
-					newindice = currentindice + increment;
-
-				if (newindice >= max || newindice <= MAXVAL)
 				{
-					newvalue = var->PossibleValue[((increment > 0) ? MINVAL : MAXVAL)].value;
-					CV_SetValue(var, newvalue);
+					if (var->PossibleValue[max].value == newvalue)
+					{
+						increment = 0;
+						currentindice = max;
+						break; // The value we definitely want, stop here.
+					}
+					else if (var->PossibleValue[max].value == var->value)
+						currentindice = max; // The value we maybe want.
+				}
+
+				if (increment)
+				{
+					increment = (increment > 0) ? 1 : -1;
+					if (currentindice == -1 && max != MAXVAL+1)
+						newindice = ((increment > 0) ? MAXVAL : max) + increment;
+					else
+						newindice = currentindice + increment;
+
+					if (newindice >= max || newindice <= MAXVAL)
+					{
+						newvalue = var->PossibleValue[((increment > 0) ? MINVAL : MAXVAL)].value;
+						CV_SetValue(var, newvalue);
+					}
+					else
+						CV_Set(var, var->PossibleValue[newindice].strvalue);
 				}
 				else
-					CV_Set(var, var->PossibleValue[newindice].strvalue);
+					CV_Set(var, var->PossibleValue[currentindice].strvalue);
 			}
 			else
 				CV_SetValue(var, newvalue);
@@ -1700,6 +1759,7 @@ void CV_AddValue(consvar_t *var, INT32 increment)
 				if (var->PossibleValue[max].value == var->value)
 					currentindice = max;
 
+			// The following options will NOT handle netsyncing.
 			if (var == &cv_chooseskin)
 			{
 				// Special case for the chooseskin variable, used only directly from the menu
@@ -1758,28 +1818,7 @@ void CV_AddValue(consvar_t *var, INT32 increment)
 			}
 			else if (var == &cv_kartspeed)
 			{
-				INT32 maxspeed = (M_SecretUnlocked(SECRET_HARDSPEED) ? 2 : 1);
-				// Special case for the kartspeed variable, used only directly from the menu to prevent selecting hard mode
-				if (increment > 0) // Going up!
-				{
-					newvalue = var->value + 1;
-					if (newvalue > maxspeed)
-						newvalue = 0;
-					var->value = newvalue;
-					var->string = var->PossibleValue[var->value].strvalue;
-					var->func();
-					return;
-				}
-				else if (increment < 0) // Going down!
-				{
-					newvalue = var->value - 1;
-					if (newvalue < 0)
-						newvalue = maxspeed;
-					var->value = newvalue;
-					var->string = var->PossibleValue[var->value].strvalue;
-					var->func();
-					return;
-				}
+				max = (M_SecretUnlocked(SECRET_HARDSPEED) ? 3 : 2);
 			}
 #ifdef PARANOIA
 			if (currentindice == -1)
@@ -1870,6 +1909,45 @@ static boolean CV_FilterJoyAxisVars(consvar_t *v, const char *valstr)
 	return true;
 }
 
+// Block the Xbox DInput default axes and reset to the current defaults 
+static boolean CV_FilterJoyAxisVars2(consvar_t *v, const char *valstr)
+{
+	if (!stricmp(v->name, "joyaxis_turn") && !stricmp(valstr, "X-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis2_turn") && !stricmp(valstr, "X-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis3_turn") && !stricmp(valstr, "X-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis4_turn") && !stricmp(valstr, "X-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis_aim") && !stricmp(valstr, "Y-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis2_aim") && !stricmp(valstr, "Y-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis3_aim") && !stricmp(valstr, "Y-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis4_aim") && !stricmp(valstr, "Y-Axis"))
+		return false;
+	if (!stricmp(v->name, "joyaxis_fire") && !stricmp(valstr, "None"))
+		return false;
+	if (!stricmp(v->name, "joyaxis2_fire") && !stricmp(valstr, "None"))
+		return false;
+	if (!stricmp(v->name, "joyaxis3_fire") && !stricmp(valstr, "None"))
+		return false;
+	if (!stricmp(v->name, "joyaxis4_fire") && !stricmp(valstr, "None"))
+		return false;
+	if (!stricmp(v->name, "joyaxis_drift") && !stricmp(valstr, "None"))
+		return false;
+	if (!stricmp(v->name, "joyaxis2_drift") && !stricmp(valstr, "None"))
+		return false;
+	if (!stricmp(v->name, "joyaxis3_drift") && !stricmp(valstr, "None"))
+		return false;
+	if (!stricmp(v->name, "joyaxis4_drift") && !stricmp(valstr, "None"))
+		return false;
+
+	return true;
+}
+
 static boolean CV_FilterVarByVersion(consvar_t *v, const char *valstr)
 {
 	// True means allow the CV change, False means block it
@@ -1878,6 +1956,13 @@ static boolean CV_FilterVarByVersion(consvar_t *v, const char *valstr)
 	// We do this same check in CV_Command
 	if (!(v->flags & CV_SAVE))
 		return true;
+
+	if (GETMAJOREXECVERSION(cv_execversion.value) < 8) // 8 = 1.4
+	{
+		if (!stricmp(v->name, "masterserver") // Replaces a hack in MasterServer_OnChange for the original SRB2 MS.
+			|| !stricmp(v->name, "gamma")) // Too easy to accidentially change in prior versions.
+			return false;
+	}
 
 	if (GETMAJOREXECVERSION(cv_execversion.value) < 2) // 2 = 1.0.2
 	{
@@ -1893,6 +1978,13 @@ static boolean CV_FilterVarByVersion(consvar_t *v, const char *valstr)
 		// axis defaults were changed to be friendly to 360 controllers
 		// if ALL axis settings are defaults, then change them to new values
 		if (!CV_FilterJoyAxisVars(v, valstr))
+			return false;
+	}
+
+	if (GETMAJOREXECVERSION(cv_execversion.value) < 10) // 10 = 1.6
+	{
+		// axis defaults changed again to SDL game controllers
+		if (!CV_FilterJoyAxisVars2(v, valstr))
 			return false;
 	}
 

@@ -23,6 +23,9 @@
 #include "lua_script.h"
 #include "lua_hook.h"
 #include "k_kart.h"
+#include "r_main.h"
+#include "r_fps.h"
+#include "i_video.h" // rendermode
 
 // Object place
 #include "m_cheat.h"
@@ -234,6 +237,7 @@ void P_RemoveThinkerDelayed(void *pthinker)
 			 * thinker->prev->next = thinker->next */
 			(next->prev = currentthinker = thinker->prev)->next = next;
 		}
+		R_DestroyLevelInterpolators(thinker);
 		Z_Free(thinker);
 	}
 }
@@ -586,8 +590,10 @@ void P_Ticker(boolean run)
 		if (OP_FreezeObjectplace())
 		{
 			P_MapStart();
+			R_UpdateMobjInterpolators();
 			OP_ObjectplaceMovement(&players[0]);
 			P_MoveChaseCamera(&players[0], &camera[0], false);
+			R_UpdateViewInterpolation();
 			P_MapEnd();
 			return;
 		}
@@ -622,6 +628,8 @@ void P_Ticker(boolean run)
 
 	if (run)
 	{
+		R_UpdateMobjInterpolators();
+
 		if (demo.recording)
 		{
 			G_WriteDemoExtraData();
@@ -659,6 +667,10 @@ void P_Ticker(boolean run)
 			}
 #endif
 		}
+
+#ifdef HAVE_BLUA
+		LUAh_PreThinkFrame();
+#endif
 
 		for (i = 0; i < MAXPLAYERS; i++)
 			if (playeringame[i] && players[i].mo && !P_MobjWasRemoved(players[i].mo))
@@ -743,6 +755,11 @@ void P_Ticker(boolean run)
 		if (hyubgone > 0)
 			hyubgone--;
 
+		if (G_RaceGametype())
+		{
+			K_UpdateSpectateGrief();
+		}
+
 		if (G_BattleGametype())
 		{
 			if (wantedcalcdelay && --wantedcalcdelay <= 0)
@@ -768,10 +785,12 @@ void P_Ticker(boolean run)
 
 		if (demo.recording)
 		{
+			INT32 axis = JoyAxis(AXISLOOKBACK, 1);
+
 			G_WriteAllGhostTics();
 
 			if (cv_recordmultiplayerdemos.value && (demo.savemode == DSM_NOTSAVING || demo.savemode == DSM_WILLAUTOSAVE))
-				if (demo.savebutton && demo.savebutton + 3*TICRATE < leveltime && InputDown(gc_lookback, 1))
+				if (demo.savebutton && demo.savebutton + 3*TICRATE < leveltime && (InputDown(gc_lookback, 1) || (cv_usejoystick.value && axis > 0)))
 					demo.savemode = DSM_TITLEENTRY;
 		}
 		else if (demo.playback) // Use Ghost data for consistency checks.
@@ -791,6 +810,10 @@ void P_Ticker(boolean run)
 			&& --mapreset <= 1
 			&& server) // Remember: server uses it for mapchange, but EVERYONE ticks down for the animation
 				D_MapChange(gamemap, gametype, encoremode, true, 0, false, false);
+
+#ifdef HAVE_BLUA
+		LUAh_PostThinkFrame();
+#endif
 	}
 
 	// Always move the camera.
@@ -798,6 +821,31 @@ void P_Ticker(boolean run)
 	{
 		if (camera[i].chase)
 			P_MoveChaseCamera(&players[displayplayers[i]], &camera[i], false);
+	}
+
+	if (run)
+	{
+		R_UpdateLevelInterpolators();
+		R_UpdateViewInterpolation();
+
+		// Hack: ensure newview is assigned every tic.
+		// Ensures view interpolation is T-1 to T in poor network conditions
+		// We need a better way to assign view state decoupled from game logic
+		if (rendermode != render_none)
+		{
+			for (i = 0; i <= splitscreen; i++)
+			{
+				player_t *player = &players[displayplayers[i]];
+				boolean isSkyVisibleForPlayer = skyVisiblePerPlayer[i];
+				if (!player->mo)
+					continue;
+				if (isSkyVisibleForPlayer && skyboxmo[0] && cv_skybox.value)
+				{
+					R_SkyboxFrame(player);
+				}
+				R_SetupFrame(player, (skyboxmo[0] && cv_skybox.value));
+			}
+		}
 	}
 
 	P_MapEnd();
@@ -811,15 +859,23 @@ void P_Ticker(boolean run)
 // Abbreviated ticker for pre-loading, calls thinkers and assorted things
 void P_PreTicker(INT32 frames)
 {
-	INT32 i,framecnt;
+	INT32 i;
 	ticcmd_t temptic;
 
 	for (i = 0; i <= splitscreen; i++)
 		postimgtype[i] = postimg_none;
 
-	for (framecnt = 0; framecnt < frames; ++framecnt)
+	hook_defrosting = frames;
+
+	while (hook_defrosting)
 	{
 		P_MapStart();
+
+		R_UpdateMobjInterpolators();
+
+#ifdef HAVE_BLUA
+		LUAh_PreThinkFrame();
+#endif
 
 		for (i = 0; i < MAXPLAYERS; i++)
 			if (playeringame[i] && players[i].mo && !P_MobjWasRemoved(players[i].mo))
@@ -855,6 +911,16 @@ void P_PreTicker(INT32 frames)
 		P_UpdateSpecials();
 		P_RespawnSpecials();
 
+#ifdef HAVE_BLUA
+		LUAh_PostThinkFrame();
+#endif
+
+		R_UpdateLevelInterpolators();
+		R_UpdateViewInterpolation();
+		R_ResetViewInterpolation(0);
+
 		P_MapEnd();
+
+		hook_defrosting--;
 	}
 }

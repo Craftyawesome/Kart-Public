@@ -429,15 +429,25 @@ void R_LoadTextures(void)
 		// Add all the textures between TX_START and TX_END
 		if (texstart != INT16_MAX && texend != INT16_MAX)
 		{
-			numtextures += (UINT32)(texend - texstart);
-		}
-
-		// If no textures found by this point, bomb out
-		if (!numtextures && w == (numwadfiles - 1))
-		{
-			I_Error("No textures detected in any WADs!\n");
+			// PK3s have subfolders, so we can't just make a simple sum
+			if (W_FileHasFolders(wadfiles[w]))
+			{
+				for (j = texstart; j < texend; j++)
+				{
+					if (!W_IsLumpFolder((UINT16)w, j)) // Check if lump is a folder; if not, then count it
+						numtextures++;
+				}
+			}
+			else
+			{
+				numtextures += (UINT32)(texend - texstart);
+			}
 		}
 	}
+
+	// If no textures found by this point, bomb out
+	if (!numtextures)
+		I_Error("No textures detected in any WADs!\n");
 
 	// Allocate memory and initialize to 0 for all the textures we are initialising.
 	// There are actually 5 buffers allocated in one for convenience.
@@ -484,46 +494,41 @@ void R_LoadTextures(void)
 			continue;
 
 		// Work through each lump between the markers in the WAD.
-		for (j = 0; j < (texend - texstart); i++, j++)
+		for (j = 0; j < (texend - texstart); j++)
 		{
+			if (W_FileHasFolders(wadfiles[w]))
+			{
+				if (W_IsLumpFolder(w, texstart + j)) // Check if lump is a folder
+					continue; // If it is then SKIP IT
+			}
 			patchlump = W_CacheLumpNumPwad((UINT16)w, texstart + j, PU_CACHE);
 
-			// Then, check the lump directly to see if it's a texture SOC,
-			// and if it is, load it using dehacked instead.
-			if (strstr((const char *)patchlump, "TEXTURE"))
-			{
-				CONS_Alert(CONS_WARNING, "%s is a Texture SOC.\n", W_CheckNameForNumPwad((UINT16)w,texstart+j));
-				Z_Unlock(patchlump);
-				DEH_LoadDehackedLumpPwad((UINT16)w, texstart + j);
-			}
-			else
-			{
-				//CONS_Printf("\n\"%s\" is a single patch, dimensions %d x %d",W_CheckNameForNumPwad((UINT16)w,texstart+j),patchlump->width, patchlump->height);
-				texture = textures[i] = Z_Calloc(sizeof(texture_t) + sizeof(texpatch_t), PU_STATIC, NULL);
+			//CONS_Printf("\n\"%s\" is a single patch, dimensions %d x %d",W_CheckNameForNumPwad((UINT16)w,texstart+j),patchlump->width, patchlump->height);
+			texture = textures[i] = Z_Calloc(sizeof(texture_t) + sizeof(texpatch_t), PU_STATIC, NULL);
 
-				// Set texture properties.
-				M_Memcpy(texture->name, W_CheckNameForNumPwad((UINT16)w, texstart + j), sizeof(texture->name));
-				texture->width = SHORT(patchlump->width);
-				texture->height = SHORT(patchlump->height);
-				texture->patchcount = 1;
-				texture->holes = false;
+			// Set texture properties.
+			M_Memcpy(texture->name, W_CheckNameForNumPwad((UINT16)w, texstart + j), sizeof(texture->name));
+			texture->width = SHORT(patchlump->width);
+			texture->height = SHORT(patchlump->height);
+			texture->patchcount = 1;
+			texture->holes = false;
 
-				// Allocate information for the texture's patches.
-				patch = &texture->patches[0];
+			// Allocate information for the texture's patches.
+			patch = &texture->patches[0];
 
-				patch->originx = patch->originy = 0;
-				patch->wad = (UINT16)w;
-				patch->lump = texstart + j;
+			patch->originx = patch->originy = 0;
+			patch->wad = (UINT16)w;
+			patch->lump = texstart + j;
 
-				Z_Unlock(patchlump);
+			Z_Unlock(patchlump);
 
-				k = 1;
-				while (k << 1 <= texture->width)
-					k <<= 1;
+			k = 1;
+			while (k << 1 <= texture->width)
+				k <<= 1;
 
-				texturewidthmask[i] = k - 1;
-				textureheight[i] = texture->height << FRACBITS;
-			}
+			texturewidthmask[i] = k - 1;
+			textureheight[i] = texture->height << FRACBITS;
+			i++;
 		}
 	}
 }

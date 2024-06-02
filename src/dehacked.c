@@ -591,7 +591,6 @@ void DEH_UpdateMaxFreeslots(void)
 }
 
 // TODO: Figure out how to do undolines for this....
-// TODO: Warnings for running out of freeslots
 static void readfreeslots(MYFILE *f)
 {
 	char *s = Z_Malloc(MAXLINELEN, PU_STATIC, NULL);
@@ -625,10 +624,12 @@ static void readfreeslots(MYFILE *f)
 				break;
 
 			// TODO: Check for existing freeslot mobjs/states/etc. and make errors.
-			// TODO: Out-of-slots warnings/errors.
 			// TODO: Name too long (truncated) warnings.
 			if (fastcmp(type, "SFX"))
+			{
+				CONS_Printf("Sound sfx_%s allocated.\n",word);
 				S_AddSoundFx(word, false, 0, false);
+			}
 			else if (fastcmp(type, "SPR"))
 			{
 				for (i = SPR_FIRSTFREESLOT; i <= SPR_LASTFREESLOT; i++)
@@ -642,29 +643,40 @@ static void readfreeslots(MYFILE *f)
 					// Found a free slot!
 					strncpy(sprnames[i],word,4);
 					//sprnames[i][4] = 0;
+					CONS_Printf("Sprite SPR_%s allocated.\n",word);
 					used_spr[(i-SPR_FIRSTFREESLOT)/8] |= 1<<(i%8); // Okay, this sprite slot has been named now.
 					break;
 				}
+				if (i > SPR_LASTFREESLOT)
+					I_Error("Out of Sprite Freeslots while allocating \"%s\"\nLoad less addons to fix this.", word);
 			}
 			else if (fastcmp(type, "S"))
 			{
 				for (i = 0; i < NUMSTATEFREESLOTS; i++)
 					if (!FREE_STATES[i]) {
+						CONS_Printf("State S_%s allocated.\n",word);
 						FREE_STATES[i] = Z_Malloc(strlen(word)+1, PU_STATIC, NULL);
 						strcpy(FREE_STATES[i],word);
 						freeslotusage[0][0]++;
 						break;
 					}
+
+				if (i == NUMSTATEFREESLOTS)
+					I_Error("Out of State Freeslots while allocating \"%s\"\nLoad less addons to fix this.", word);
 			}
 			else if (fastcmp(type, "MT"))
 			{
 				for (i = 0; i < NUMMOBJFREESLOTS; i++)
 					if (!FREE_MOBJS[i]) {
+						CONS_Printf("MobjType MT_%s allocated.\n",word);
 						FREE_MOBJS[i] = Z_Malloc(strlen(word)+1, PU_STATIC, NULL);
 						strcpy(FREE_MOBJS[i],word);
 						freeslotusage[1][0]++;
 						break;
 					}
+
+				if (i == NUMMOBJFREESLOTS)
+					I_Error("Out of Mobj Freeslots while allocating \"%s\"\nLoad less addons to fix this.", word);
 			}
 			else
 				deh_warning("Freeslots: unknown enum class '%s' for '%s_%s'", type, type, word);
@@ -2629,109 +2641,6 @@ static void readconditionset(MYFILE *f, UINT8 setnum)
 	Z_Free(s);
 }
 
-static void readtexture(MYFILE *f, const char *name)
-{
-	char *s = Z_Malloc(MAXLINELEN, PU_STATIC, NULL);
-	char *word;
-	char *word2;
-	char *tmp;
-	INT32 i, j, value;
-	UINT16 width = 0, height = 0;
-	INT16 patchcount = 0;
-	texture_t *texture;
-
-	do
-	{
-		if (myfgets(s, MAXLINELEN, f))
-		{
-			if (s[0] == '\n')
-				break;
-
-			tmp = strchr(s, '#');
-			if (tmp)
-				*tmp = '\0';
-
-			value = searchvalue(s);
-			word = strtok(s, " ");
-			if (word)
-				strupr(word);
-			else
-				break;
-
-			word2 = strtok(NULL, " ");
-			if (word2)
-				strupr(word2);
-			else
-				break;
-
-			// Width of the texture.
-			if (fastcmp(word, "WIDTH"))
-			{
-				DEH_WriteUndoline(word, va("%d", width), UNDO_NONE);
-				width = SHORT((UINT16)value);
-			}
-			// Height of the texture.
-			else if (fastcmp(word, "HEIGHT"))
-			{
-				DEH_WriteUndoline(word, va("%d", height), UNDO_NONE);
-				height = SHORT((UINT16)value);
-			}
-			// Number of patches the texture has.
-			else if (fastcmp(word, "NUMPATCHES"))
-			{
-				DEH_WriteUndoline(word, va("%d", patchcount), UNDO_NONE);
-				patchcount = SHORT((UINT16)value);
-			}
-			else
-				deh_warning("readtexture: unknown word '%s'", word);
-		}
-	} while (!myfeof(f));
-
-	// Error checking.
-	if (!width)
-		I_Error("Texture %s has no width!\n", name);
-
-	if (!height)
-		I_Error("Texture %s has no height!\n", name);
-
-	if (!patchcount)
-		I_Error("Texture %s has no patches!\n", name);
-
-	// Allocate memory for the texture, and fill in information.
-	texture = Z_Calloc(sizeof(texture_t) + (sizeof(texpatch_t) * SHORT(patchcount)), PU_STATIC, NULL);
-	M_Memcpy(texture->name, name, sizeof(texture->name));
-	texture->width = width;
-	texture->height = height;
-	texture->patchcount = patchcount;
-	texture->holes = false;
-	// Fill out the texture patches, to allow them to be detected
-	// accurately by readpatch.
-	for (i = 0; i < patchcount; i++)
-	{
-		texture->patches[i].originx = 0;
-		texture->patches[i].originy = 0;
-		texture->patches[i].wad = UINT16_MAX;
-		texture->patches[i].lump = UINT16_MAX;
-	}
-
-	// Jump to the next empty texture entry.
-	i = 0;
-	while (textures[i])
-		i++;
-
-	// Fill the global texture buffer entries.
-	j = 1;
-	while (j << 1 <= texture->width)
-		j <<= 1;
-
-	textures[i] = texture;
-	texturewidthmask[i] = j - 1;
-	textureheight[i] = texture->height << FRACBITS;
-
-	// Clean up.
-	Z_Free(s);
-}
-
 static void readpatch(MYFILE *f, const char *name, UINT16 wad)
 {
 	char *s = Z_Malloc(MAXLINELEN, PU_STATIC, NULL);
@@ -3338,14 +3247,7 @@ static void DEH_LoadDehackedFile(MYFILE *f, UINT16 wad)
 				if (word2[strlen(word2)-1] == '\n')
 					word2[strlen(word2)-1] = '\0';
 				i = atoi(word2);
-				if (fastcmp(word, "TEXTURE"))
-				{
-					// Read texture from spec file.
-					readtexture(f, word2);
-					DEH_WriteUndoline(word, word2, UNDO_HEADER);
-					// This is not a major mod.
-				}
-				else if (fastcmp(word, "PATCH"))
+				if (fastcmp(word, "PATCH"))
 				{
 					// Read patch from spec file.
 					readpatch(f, word2, wad);
@@ -3385,7 +3287,7 @@ static void DEH_LoadDehackedFile(MYFILE *f, UINT16 wad)
 
 					if (i > 0 && i <= NUMMAPS)
 					{
-						if (mapheaderinfo[i])
+						if (mapheaderinfo[i-1])
 							G_SetGameModified(multiplayer, true); // only mark as a major mod if it replaces an already-existing mapheaderinfo
 						readlevelheader(f, i);
 					}
@@ -6982,6 +6884,15 @@ static const char *const STATE_LIST[] = { // array length left dynamic for sanit
 	"S_LIZARDMAN",
 	"S_LIONMAN",
 
+	// Opulence
+	"S_OPULENCE_PALMTREE",
+	"S_OPULENCE_FERN",
+
+	"S_TUMBLEGEM_IDLE",
+	"S_TUMBLEGEM_ROLL",
+	"S_TUMBLECOIN_IDLE",
+	"S_TUMBLECOIN_FLIP",
+
 	"S_KARMAFIREWORK1",
 	"S_KARMAFIREWORK2",
 	"S_KARMAFIREWORK3",
@@ -7779,6 +7690,13 @@ static const char *const MOBJTYPE_LIST[] = {  // array length left dynamic for s
 	"MT_ARIDTOAD",
 	"MT_LIZARDMAN",
 	"MT_LIONMAN",
+
+	// Opulence
+	"MT_OPULENCE_PALMTREE",
+	"MT_OPULENCE_FERN",
+
+	"MT_TUMBLEGEM",
+	"MT_TUMBLECOIN",
 
 	"MT_KARMAFIREWORK",
 
@@ -8685,6 +8603,11 @@ struct {
 	{"BT_CUSTOM2",BT_CUSTOM2}, // Lua customizable
 	{"BT_CUSTOM3",BT_CUSTOM3}, // Lua customizable
 
+	// Lua command registration flags
+	{"COM_ADMIN",COM_ADMIN},
+	{"COM_SPLITSCREEN",COM_SPLITSCREEN},
+	{"COM_LOCAL",COM_LOCAL},
+
 	// cvflags_t
 	{"CV_SAVE",CV_SAVE},
 	{"CV_CALL",CV_CALL},
@@ -9215,7 +9138,7 @@ void DEH_Check(void)
 static inline int lib_freeslot(lua_State *L)
 {
 	int n = lua_gettop(L);
-  int r = 0; // args returned
+	int r = 0; // args returned
 	char *s, *type,*word;
 
   while (n-- > 0)
@@ -9245,7 +9168,7 @@ static inline int lib_freeslot(lua_State *L)
 				lua_pushinteger(L, sfx);
 				r++;
 			} else
-				return r;
+				I_Error("Out of Sfx Freeslots while allocating \"%s\"\nLoad less addons to fix this.", word); //Should never get here since S_AddSoundFx was changed to throw I_Error when it can't allocate
 		}
 		else if (fastcmp(type, "SPR"))
 		{
@@ -9272,7 +9195,7 @@ static inline int lib_freeslot(lua_State *L)
 				break;
 			}
 			if (j > SPR_LASTFREESLOT)
-				return r;
+				I_Error("Out of Sprite Freeslots while allocating \"%s\"\nLoad less addons to fix this.", word);
 		}
 		else if (fastcmp(type, "S"))
 		{
@@ -9288,7 +9211,7 @@ static inline int lib_freeslot(lua_State *L)
 					break;
 				}
 			if (i == NUMSTATEFREESLOTS)
-				return r;
+				I_Error("Out of State Freeslots while allocating \"%s\"\nLoad less addons to fix this.", word);
 		}
 		else if (fastcmp(type, "MT"))
 		{
@@ -9304,7 +9227,7 @@ static inline int lib_freeslot(lua_State *L)
 					break;
 				}
 			if (i == NUMMOBJFREESLOTS)
-				return r;
+				I_Error("Out of Mobj Freeslots while allocating \"%s\"\nLoad less addons to fix this.", word);
 		}
 		Z_Free(s);
 		lua_remove(L, 1);
@@ -9682,6 +9605,9 @@ static inline int lib_getenum(lua_State *L)
 	} else if (fastcmp(word,"leveltime")) {
 		lua_pushinteger(L, leveltime);
 		return 1;
+	} else if (fastcmp(word,"defrosting")) {
+		lua_pushinteger(L, hook_defrosting);
+		return 1;
 	} else if (fastcmp(word,"curWeather")) {
 		lua_pushinteger(L, curWeather);
 		return 1;
@@ -9713,12 +9639,12 @@ static inline int lib_getenum(lua_State *L)
 			return 0;
 		LUA_PushUserdata(L, &players[consoleplayer], META_PLAYER);
 		return 1;
-	/*} else if (fastcmp(word,"admin")) {
-		LUA_Deprecated(L, "admin", "IsPlayerAdmin(player)");
-		if (!playeringame[adminplayers[0]] || IsPlayerAdmin(serverplayer))
-			return 0;
-		LUA_PushUserdata(L, &players[adminplayers[0]], META_PLAYER);
-		return 1;*/
+	} else if (fastcmp(word,"isserver")) {
+		lua_pushboolean(L, server);
+		return 1;
+	} else if (fastcmp(word, "isdedicatedserver")) {
+		lua_pushboolean(L, dedicated);
+		return 1;
 	} else if (fastcmp(word,"gravity")) {
 		lua_pushinteger(L, gravity);
 		return 1;

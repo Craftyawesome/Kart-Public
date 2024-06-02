@@ -36,6 +36,7 @@ set(SRB2_SDL2_SOURCES
 	i_system.c
 	i_ttf.c
 	i_video.c
+	i_threads.c
 	#IMG_xpm.c
 	ogl_sdl.c
 
@@ -147,37 +148,49 @@ if(${SDL2_FOUND})
 	set_target_properties(SRB2SDL2 PROPERTIES OUTPUT_NAME ${SRB2_SDL2_EXE_NAME})
 
 	if(${CMAKE_SYSTEM} MATCHES Darwin)
-		find_library(CORE_LIB CoreFoundation)
+		find_library(CORE_FOUNDATION_LIBRARY "CoreFoundation")
 		target_link_libraries(SRB2SDL2 PRIVATE
-			${CORE_LIB}
-			SDL2
-			SDL2_mixer
-			${GME_LIBRARIES}
-			${PNG_LIBRARIES}
-			${ZLIB_LIBRARIES}
-			${OPENGL_LIBRARIES}
-			${CURL_LIBRARIES}
-			${DISCORDRPC_LIBRARIES}
+			${CORE_FOUNDATION_LIBRARY}
 		)
 		set_target_properties(SRB2SDL2 PROPERTIES OUTPUT_NAME "${CPACK_PACKAGE_DESCRIPTION_SUMMARY}")
-	else()
-		target_link_libraries(SRB2SDL2 PRIVATE
-			${SDL2_LIBRARIES}
-			${SDL2_MIXER_LIBRARIES}
-			${GME_LIBRARIES}
-			${PNG_LIBRARIES}
-			${ZLIB_LIBRARIES}
-			${OPENGL_LIBRARIES}
-			${CURL_LIBRARIES}
-			${DISCORDRPC_LIBRARIES}
-		)
 
-		if(${CMAKE_SYSTEM} MATCHES Linux)
-			target_link_libraries(SRB2SDL2 PRIVATE
-				m
-				rt
-			)
-		endif()
+		# Configure the app bundle icon and plist properties
+		target_sources(SRB2SDL2 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/macosx/Srb2mac.icns")
+		set_target_properties(SRB2SDL2 PROPERTIES
+			MACOSX_BUNDLE_ICON_FILE "Srb2mac"
+			MACOSX_BUNDLE_BUNDLE_NAME "Sonic Robo Blast 2"
+			MACOSX_BUNDLE_BUNDLE_VERSION ${SRB2_VERSION}
+
+			RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/macosx/Srb2mac.icns"
+		)
+	endif()
+
+	target_link_libraries(SRB2SDL2 PRIVATE
+		${SDL2_LIBRARIES}
+		${SDL2_MIXER_LIBRARIES}
+		${GME_LIBRARIES}
+		${OPENMPT_LIBRARIES}
+		${MIXERX_LIBRARIES}
+		${PNG_LIBRARIES}
+		${ZLIB_LIBRARIES}
+		${OPENGL_LIBRARIES}
+		${CURL_LIBRARIES}
+		${DISCORDRPC_LIBRARIES}
+	)
+
+	if(${CMAKE_SYSTEM} MATCHES Linux)
+		target_link_libraries(SRB2SDL2 PRIVATE
+			m
+			rt
+		)
+	endif()
+
+	if(${CMAKE_SYSTEM} MATCHES Windows AND ${CMAKE_C_COMPILER_ID} MATCHES "GNU" AND ${SRB2_SYSTEM_BITS} EQUAL 32)
+		target_link_libraries(SRB2SDL2 PRIVATE
+			"${CMAKE_CURRENT_SOURCE_DIR}/../../libs/drmingw/lib/win32/libexchndl.a"
+			"${CMAKE_CURRENT_SOURCE_DIR}/../../libs/drmingw/lib/win32/libmgwhelp.a"
+		)
+		target_include_directories(SRB2SDL2 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../libs/drmingw/include")
 	endif()
 
 	#target_link_libraries(SRB2SDL2 PRIVATE SRB2Core)
@@ -205,8 +218,6 @@ if(${SDL2_FOUND})
 			endforeach()
 		endif()
 	endif()
-
-	set_target_properties(SRB2SDL2 PROPERTIES VERSION ${SRB2_VERSION})
 
 	if(${CMAKE_SYSTEM} MATCHES Windows)
 		target_link_libraries(SRB2SDL2 PRIVATE
@@ -259,6 +270,7 @@ if(${SDL2_FOUND})
 
 	target_compile_definitions(SRB2SDL2 PRIVATE
 		-DHAVE_SDL
+		-DHAVE_THREADS
 	)
 
 	## strip debug symbols into separate file when using gcc
@@ -278,6 +290,7 @@ if(${SDL2_FOUND})
 		install(TARGETS SRB2SDL2
 			BUNDLE DESTINATION .
 		)
+		set_property(TARGET SRB2SDL2 PROPERTY INSTALL_RPATH_USE_LINK_PATH ON)
 	else()
 		install(TARGETS SRB2SDL2 SRB2SDL2
 			RUNTIME DESTINATION .

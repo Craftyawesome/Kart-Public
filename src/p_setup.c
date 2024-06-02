@@ -21,6 +21,7 @@
 #include "p_spec.h"
 #include "p_saveg.h"
 
+#include "i_time.h"
 #include "i_sound.h" // for I_PlayCD()..
 #include "i_video.h" // for I_FinishUpdate()..
 #include "r_sky.h"
@@ -30,6 +31,7 @@
 #include "r_things.h"
 #include "r_sky.h"
 #include "r_draw.h"
+#include "r_fps.h" // R_ResetViewInterpolation in level load
 
 #include "s_sound.h"
 #include "st_stuff.h"
@@ -140,6 +142,12 @@ mapthing_t *deathmatchstarts[MAX_DM_STARTS];
 mapthing_t *playerstarts[MAXPLAYERS];
 mapthing_t *bluectfstarts[MAXPLAYERS];
 mapthing_t *redctfstarts[MAXPLAYERS];
+
+// Global state for PartialAddWadFile/MultiSetupWadFiles
+// Might be replacable with parameters, but non-trivial when the functions are called on separate tics
+static SINT8 partadd_stage = -1;
+static boolean partadd_replacescurrentmap = false;
+static boolean partadd_important = false;
 
 /** Logs an error about a map being corrupt, then terminate.
   * This allows reporting highly technical errors for usefulness, without
@@ -2396,6 +2404,8 @@ static void P_LevelInitStuff(void)
 		players[i].exiting = 0;
 		P_ResetPlayer(&players[i]);
 
+		players[i].spectatorreentry = 0; // SRB2Kart 1.4
+
 		players[i].mo = NULL;
 
 		// we must unset axis details too
@@ -2909,7 +2919,10 @@ boolean P_SetupLevel(boolean skipprecip)
 		{
 			// wait loop
 			while (!((nowtime = I_GetTime()) - lastwipetic))
-				I_Sleep();
+			{
+				I_Sleep(cv_sleep.value);
+				I_UpdateTime(cv_timescale.value);
+			}
 			lastwipetic = nowtime;
 			if (moviemode) // make sure we save frames for the white hold too
 				M_SaveFrame();
@@ -2988,7 +3001,10 @@ boolean P_SetupLevel(boolean skipprecip)
 	R_ClearLevelSplats();
 #endif
 
+	R_InitializeLevelInterpolators();
+
 	P_InitThinkers();
+	R_InitMobjInterpolators();
 	P_InitCachedActions();
 
 	/// \note for not spawning precipitation, etc. when loading netgame snapshots
@@ -3055,6 +3071,10 @@ boolean P_SetupLevel(boolean skipprecip)
 					(fileinfo + ML_REJECT)->size,
 					(fileinfo + ML_REJECT)->name);
 		}
+		else
+		{
+			rejectmatrix = NULL;
+		}
 
 		// Important: take care of the ordering of the next functions.
 		if (!loadedbm)
@@ -3114,13 +3134,13 @@ boolean P_SetupLevel(boolean skipprecip)
 		if (!playerstarts[numcoopstarts])
 			break;
 
+	globalweather = mapheaderinfo[gamemap-1]->weather;
+
 	// set up world state
 	P_SpawnSpecials(fromnetsave);
 
 	if (loadprecip) //  ugly hack for P_NetUnArchiveMisc (and P_LoadNetGame)
 		P_SpawnPrecipitation();
-
-	globalweather = mapheaderinfo[gamemap-1]->weather;
 
 #ifdef HWRENDER // not win32 only 19990829 by Kin
 	if (rendermode != render_soft && rendermode != render_none)
@@ -3227,6 +3247,37 @@ boolean P_SetupLevel(boolean skipprecip)
 		G_RecordDemo(buf);
 	}
 
+	wantedcalcdelay = wantedfrequency*2;
+	indirectitemcooldown = 0;
+	hyubgone = 0;
+	mapreset = 0;
+	nospectategrief = 0;
+	thwompsactive = false;
+	spbplace = -1;
+
+	startedInFreePlay = false;
+	{
+		UINT8 nump = 0;
+		for (i = 0; i < MAXPLAYERS; i++)
+		{
+			if (!playeringame[i] || players[i].spectator)
+			{
+				continue;
+			}
+
+			nump++;
+			if (nump == 2)
+			{
+				break;
+			}
+		}
+
+		if (nump <= 1)
+		{
+			startedInFreePlay = true;
+		}
+	}
+
 	// ===========
 	// landing point for netgames.
 	netgameskip:
@@ -3298,14 +3349,6 @@ boolean P_SetupLevel(boolean skipprecip)
 		CV_SetValue(&cv_analog2, false);
 		CV_SetValue(&cv_analog, false);
 	}*/
-
-	wantedcalcdelay = wantedfrequency*2;
-	indirectitemcooldown = 0;
-	hyubgone = 0;
-	mapreset = 0;
-	nospectategrief = 0;
-	thwompsactive = false;
-	spbplace = -1;
 
 	// clear special respawning que
 	iquehead = iquetail = 0;
@@ -3406,21 +3449,37 @@ boolean P_RunSOC(const char *socfilename)
 //
 boolean P_AddWadFile(const char *wadfilename)
 {
+	UINT16 wadnum;
+
+	if ((wadnum = P_PartialAddWadFile(wadfilename)) == UINT16_MAX)
+		return false;
+
+	P_MultiSetupWadFiles(true);
+	return true;
+}
+
+//
+// Add a WAD file and do the per-WAD setup stages.
+// Call P_MultiSetupWadFiles as soon as possible after any number of these.
+//
+UINT16 P_PartialAddWadFile(const char *wadfilename)
+{
 	size_t i, j, sreplaces = 0, mreplaces = 0, digmreplaces = 0;
 	UINT16 numlumps, wadnum;
 	char *name;
-	lumpinfo_t *lumpinfo;
-	boolean texturechange = false;
 	boolean mapsadded = false;
-	boolean replacedcurrentmap = false;
+	lumpinfo_t *lumpinfo;
 
 	if ((numlumps = W_InitFile(wadfilename)) == INT16_MAX)
 	{
 		refreshdirmenu |= REFRESHDIR_NOTLOADED;
 		CONS_Printf(M_GetText("Errors occurred while loading %s; not added.\n"), wadfilename);
-		return false;
+		return UINT16_MAX;
 	}
 	else wadnum = (UINT16)(numwadfiles-1);
+
+	if (wadfiles[wadnum]->important)
+		partadd_important = true;
 
 	//
 	// search for sound replacements
@@ -3455,14 +3514,6 @@ boolean P_AddWadFile(const char *wadfilename)
 			CONS_Debug(DBG_SETUP, "Music %.8s replaced\n", name);
 			digmreplaces++;
 		}
-#if 0
-		//
-		// search for texturechange replacements
-		//
-		else if (!memcmp(name, "TEXTURE1", 8) || !memcmp(name, "TEXTURE2", 8)
-			|| !memcmp(name, "PNAMES", 6))
-#endif
-			texturechange = true;
 	}
 	if (!devparm && sreplaces)
 		CONS_Printf(M_GetText("%s sounds replaced\n"), sizeu1(sreplaces));
@@ -3471,28 +3522,12 @@ boolean P_AddWadFile(const char *wadfilename)
 	if (!devparm && digmreplaces)
 		CONS_Printf(M_GetText("%s digital musics replaced\n"), sizeu1(digmreplaces));
 
-
 	//
 	// search for sprite replacements
 	//
 	R_AddSpriteDefs(wadnum);
 
-	// Reload it all anyway, just in case they
-	// added some textures but didn't insert a
-	// TEXTURE1/PNAMES/etc. list.
-	if (texturechange) // initialized in the sound check
-		R_LoadTextures(); // numtexture changes
-	else
-		R_FlushTextureCache(); // just reload it from file
-
-	// Reload ANIMATED / ANIMDEFS
-	P_InitPicAnims();
-
-	// Flush and reload HUD graphics
-	ST_UnloadGraphics();
-	HU_LoadGraphics();
-	ST_LoadGraphics();
-	ST_ReloadSkinFaceGraphics();
+	// everything from MultiSetupWadFile until ST_Start was here originally
 
 	//
 	// look for skins
@@ -3527,9 +3562,8 @@ boolean P_AddWadFile(const char *wadfilename)
 				mapheaderinfo[num-1]->menuflags |= LF2_EXISTSHACK;
 			}
 
-			//If you replaced the map you're on, end the level when done.
 			if (num == gamemap)
-				replacedcurrentmap = true;
+				partadd_replacescurrentmap = true;
 
 			CONS_Printf("%s\n", name);
 			mapsadded = true;
@@ -3538,24 +3572,85 @@ boolean P_AddWadFile(const char *wadfilename)
 	if (!mapsadded)
 		CONS_Printf(M_GetText("No maps added\n"));
 
-	// reload status bar (warning should have valid player!)
-	if (gamestate == GS_LEVEL)
-		ST_Start();
+	refreshdirmenu &= ~REFRESHDIR_GAMEDATA; // Under usual circumstances we'd wait for REFRESHDIR_GAMEDATA to disappear the next frame, but it's a bit too dangerous for that...
+	partadd_stage = 0;
+	return wadnum;
+}
 
-	// Prevent savefile cheating
-	if (cursaveslot >= 0)
-		cursaveslot = -1;
+// Only exists to make sure there's no way to overwrite partadd_stage externally
+// unless you really push yourself.
+SINT8 P_PartialAddGetStage(void) {
+	return partadd_stage;
+}
 
-	if (replacedcurrentmap && gamestate == GS_LEVEL && (netgame || multiplayer))
+//
+// Set up a series of partially added WAD files.
+// Setup functions that iterate over every loaded WAD go here.
+// If fullsetup false, only do one stage per call.
+//
+boolean P_MultiSetupWadFiles(boolean fullsetup)
+{
+	if (partadd_stage < 0)
+		I_Error(M_GetText("Post-load addon setup attempted without loading any addons first"));
+
+	if (partadd_stage == 0)
 	{
-		CONS_Printf(M_GetText("Current map %d replaced by added file, ending the level to ensure consistency.\n"), gamemap);
-		if (server)
-			SendNetXCmd(XD_EXITLEVEL, NULL, 0);
+		// Flush and reload HUD graphics
+		ST_UnloadGraphics();
+		HU_LoadGraphics();
+		ST_LoadGraphics();
+		ST_ReloadSkinFaceGraphics();
+
+		if (!partadd_important)
+			partadd_stage = -1; // everything done
+		else if (fullsetup)
+			++partadd_stage; // run next stage too
 	}
 
-	refreshdirmenu &= ~REFRESHDIR_GAMEDATA; // Under usual circumstances we'd wait for REFRESHDIR_GAMEDATA to disappear the next frame, but it's a bit too dangerous for that...
+	if (partadd_stage == 1)
+	{
+		// Reload all textures, unconditionally for better or worse.
+		R_LoadTextures();
 
-	return true;
+		if (fullsetup)
+			++partadd_stage;
+	}
+
+	if (partadd_stage == 2)
+	{
+		// Reload ANIMATED / ANIMDEFS
+		P_InitPicAnims();
+
+		// reload status bar (warning should have valid player!)
+		if (gamestate == GS_LEVEL)
+			ST_Start();
+
+		// Prevent savefile cheating
+		if (cursaveslot >= 0)
+			cursaveslot = -1;
+
+		if (partadd_replacescurrentmap && gamestate == GS_LEVEL && (netgame || multiplayer))
+		{
+			CONS_Printf(M_GetText("Current map %d replaced, ending the level to ensure consistency.\n"), gamemap);
+			if (server)
+				SendNetXCmd(XD_EXITLEVEL, NULL, 0);
+		}
+		partadd_stage = -1;
+	}
+
+	I_Assert(!fullsetup || partadd_stage < 0);
+
+	if (partadd_stage < 0)
+	{
+		partadd_important = false;
+		partadd_replacescurrentmap = false;
+		return true;
+	}
+	else
+	{
+		++partadd_stage;
+		return false;
+	}
 }
 
 #ifdef DELFILE

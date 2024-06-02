@@ -30,6 +30,7 @@
 #include "hw_md2.h"
 #include "../d_main.h"
 #include "../r_bsp.h"
+#include "../r_fps.h"
 #include "../r_main.h"
 #include "../m_misc.h"
 #include "../w_wad.h"
@@ -473,7 +474,7 @@ void HWR_InitMD2(void)
 	size_t i;
 	INT32 s;
 	FILE *f;
-	char name[18], filename[32];
+	char name[20], filename[32];
 	float scale, offset;
 
 	CONS_Printf("InitMD2()...\n");
@@ -560,7 +561,7 @@ md2found:
 void HWR_AddPlayerMD2(int skin) // For MD2's that were added after startup
 {
 	FILE *f;
-	char name[18], filename[32];
+	char name[20], filename[32];
 	float scale, offset;
 
 	if (nomd2s)
@@ -609,7 +610,7 @@ void HWR_AddSpriteMD2(size_t spritenum) // For MD2s that were added after startu
 	FILE *f;
 	// name[18] is used to check for names in the mdls.dat file that match with sprites or player skins
 	// sprite names are always 4 characters long, and names is for player skins can be up to 19 characters long
-	char name[18], filename[32];
+	char name[20], filename[32];
 	float scale, offset;
 
 	if (nomd2s)
@@ -659,18 +660,18 @@ spritemd2found:
 // 0.0722 to blue
 // (See this same define in k_kart.c!)
 #define SETBRIGHTNESS(brightness,r,g,b) \
-	brightness = (UINT8)(((1063*(UINT16)(r))/5000) + ((3576*(UINT16)(g))/5000) + ((361*(UINT16)(b))/5000))
+	brightness = (UINT8)(((1063*(UINT32)(r))/5000) + ((3576*(UINT32)(g))/5000) + ((361*(UINT32)(b))/5000))
 
 static void HWR_CreateBlendedTexture(GLPatch_t *gpatch, GLPatch_t *blendgpatch, GLMipmap_t *grmip, INT32 skinnum, skincolors_t color)
 {
 	UINT16 w = gpatch->width, h = gpatch->height;
 	UINT32 size = w*h;
 	RGBA_t *image, *blendimage, *cur, blendcolor;
-	UINT8 translation[16]; // First the color index
-	UINT8 cutoff[16]; // Brightness cutoff before using the next color
+	UINT8 translation[17]; // First the color index
+	UINT8 cutoff[17]; // Brightness cutoff before using the next color
 	UINT8 translen = 0;
 	UINT8 i;
-	UINT8 colorbrightnesses[16];
+	UINT8 colorbrightnesses[17];
 	UINT8 color_match_lookup[256]; // optimization attempt
 
 	blendcolor = V_GetColor(0); // initialize
@@ -740,6 +741,11 @@ static void HWR_CreateBlendedTexture(GLPatch_t *gpatch, GLPatch_t *blendgpatch, 
 		translen++;
 	}
 
+	if (translen > 0)
+		translation[translen] = translation[translen-1]; // extended to accomodate secondi if firsti equal to translen-1
+	if (translen > 1)
+		cutoff[translen] = cutoff[translen-1] = 0; // as above
+
 	if (skinnum == TC_RAINBOW && translen > 0)
 	{
 		UINT16 b;
@@ -755,7 +761,7 @@ static void HWR_CreateBlendedTexture(GLPatch_t *gpatch, GLPatch_t *blendgpatch, 
 		{
 			UINT16 brightdif = 256;
 
-			color_match_lookup[i] = 0;
+			color_match_lookup[b] = 0;
 			for (i = 0; i < translen; i++)
 			{
 				if (b > colorbrightnesses[i]) // don't allow greater matches (because calculating a makeshift gradient for this is already a huge mess as is)
@@ -771,6 +777,9 @@ static void HWR_CreateBlendedTexture(GLPatch_t *gpatch, GLPatch_t *blendgpatch, 
 			}
 		}
 	}
+
+	if (translen > 0)
+		colorbrightnesses[translen] = colorbrightnesses[translen-1];
 
 	while (size--)
 	{
@@ -917,6 +926,8 @@ static void HWR_CreateBlendedTexture(GLPatch_t *gpatch, GLPatch_t *blendgpatch, 
 					secondi = firsti+1;
 
 					mulmax = cutoff[firsti] - cutoff[secondi];
+					if (mulmax == 0)
+						mulmax = 1; // don't divide by zero on equal cutoffs (however unlikely)
 					mul = cutoff[firsti] - brightness;
 				}
 
@@ -1097,7 +1108,7 @@ void HWR_DrawMD2(gr_vissprite_t *spr)
 			light = R_GetPlaneLight(sector, spr->mobj->z + spr->mobj->height, false); // Always use the light at the top instead of whatever I was doing before
 
 			if (!(spr->mobj->frame & FF_FULLBRIGHT))
-				lightlevel = *sector->lightlist[light].lightlevel;
+				lightlevel = *sector->lightlist[light].lightlevel > 255 ? 255 : *sector->lightlist[light].lightlevel;
 
 			if (sector->lightlist[light].extra_colormap)
 				colormap = sector->lightlist[light].extra_colormap;
@@ -1105,7 +1116,7 @@ void HWR_DrawMD2(gr_vissprite_t *spr)
 		else
 		{
 			if (!(spr->mobj->frame & FF_FULLBRIGHT))
-				lightlevel = sector->lightlevel;
+				lightlevel = sector->lightlevel > 255 ? 255 : sector->lightlevel;
 
 			if (sector->extra_colormap)
 				colormap = sector->extra_colormap;
@@ -1128,6 +1139,16 @@ void HWR_DrawMD2(gr_vissprite_t *spr)
 		spritedef_t *sprdef;
 		spriteframe_t *sprframe;
 		float finalscale;
+		interpmobjstate_t interp;
+
+		if (R_UsingFrameInterpolation() && !paused)
+		{
+			R_InterpolateMobjState(spr->mobj, rendertimefrac, &interp);
+		}
+		else
+		{
+			R_InterpolateMobjState(spr->mobj, FRACUNIT, &interp);
+		}
 
 		// Apparently people don't like jump frames like that, so back it goes
 		//if (tics > durs)
@@ -1233,14 +1254,17 @@ void HWR_DrawMD2(gr_vissprite_t *spr)
 		if (spr->mobj->frame & FF_ANIMATE)
 		{
 			// set duration and tics to be the correct values for FF_ANIMATE states
-			durs = spr->mobj->state->var2;
-			tics = spr->mobj->anim_duration;
+			durs = (float)spr->mobj->state->var2;
+			tics = (float)spr->mobj->anim_duration;
 		}
 
 		//FIXME: this is not yet correct
 		frame = (spr->mobj->frame & FF_FRAMEMASK) % md2->model->meshes[0].numFrames;
 
 #ifdef USE_MODEL_NEXTFRAME
+		// Interpolate the model interpolation. (lol)
+		tics -= FixedToFloat(rendertimefrac);
+
 		if (cv_grmdls.value == 1 && tics <= durs)
 		{
 			// frames are handled differently for states with FF_ANIMATE, so get the next frame differently for the interpolation
@@ -1265,13 +1289,13 @@ void HWR_DrawMD2(gr_vissprite_t *spr)
 #endif
 
 		//Hurdler: it seems there is still a small problem with mobj angle
-		p.x = FIXED_TO_FLOAT(spr->mobj->x);
-		p.y = FIXED_TO_FLOAT(spr->mobj->y)+md2->offset;
+		p.x = FIXED_TO_FLOAT(interp.x);
+		p.y = FIXED_TO_FLOAT(interp.y)+md2->offset;
 
 		if (spr->mobj->eflags & MFE_VERTICALFLIP)
-			p.z = FIXED_TO_FLOAT(spr->mobj->z + spr->mobj->height);
+			p.z = FIXED_TO_FLOAT(interp.z + spr->mobj->height);
 		else
-			p.z = FIXED_TO_FLOAT(spr->mobj->z);
+			p.z = FIXED_TO_FLOAT(interp.z);
 
 		if (spr->mobj->skin && spr->mobj->sprite == SPR_PLAY)
 			sprdef = &((skin_t *)spr->mobj->skin)->spritedef;
@@ -1282,16 +1306,13 @@ void HWR_DrawMD2(gr_vissprite_t *spr)
 
 		if (sprframe->rotate)
 		{
-			fixed_t anglef;
-			if (spr->mobj->player)
-				anglef = AngleFixed(spr->mobj->player->frameangle);
-			else
-				anglef = AngleFixed(spr->mobj->angle);
+			fixed_t anglef = AngleFixed(interp.angle);
+
 			p.angley = FIXED_TO_FLOAT(anglef);
 		}
 		else
 		{
-			const fixed_t anglef = AngleFixed((R_PointToAngle(spr->mobj->x, spr->mobj->y))-ANGLE_180);
+			const fixed_t anglef = AngleFixed((R_PointToAngle(interp.x, interp.y))-ANGLE_180);
 			p.angley = FIXED_TO_FLOAT(anglef);
 		}
 		p.anglex = 0.0f;
@@ -1311,7 +1332,7 @@ void HWR_DrawMD2(gr_vissprite_t *spr)
 #endif
 
 		// SRB2CBTODO: MD2 scaling support
-		finalscale *= FIXED_TO_FLOAT(spr->mobj->scale);
+		finalscale *= FIXED_TO_FLOAT(interp.scale);
 
 		p.flip = atransform.flip;
 #ifdef USE_FTRANSFORM_MIRROR
