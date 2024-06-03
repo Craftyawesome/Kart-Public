@@ -1799,6 +1799,9 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 #ifdef HWRENDER
 	if (rendermode == render_opengl)
 	{
+		#ifdef __SWITCH__
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+		#endif
 		sdlglcontext = SDL_GL_CreateContext(window);
 		if (sdlglcontext == NULL)
 		{

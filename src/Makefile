@@ -161,9 +161,9 @@ SDL=1
 NOOBJDUMP=1
 NOASM=1
 NONX86=1
-NOHW=1
 NOGME=1
 OBJS+=$(OBJDIR)/switch/swkbd.o
+STATIC=1
 endif
 
 ifdef WIILINUX
@@ -883,6 +883,8 @@ $(OBJDIR)/z_zone.o: z_zone.c
 endif
 
 $(OBJDIR)/comptime.o: comptime.c pre-build
+	@echo "HERE"
+	@echo $(OBJS)
 	$(CC) $(CFLAGS) $(WFLAGS) -c $< -o $@
 
 $(BIN)/%.mo: locale/%.po
