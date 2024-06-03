@@ -14,8 +14,11 @@ jobs:
     steps:
     - name: Install 7z/zip
       run: |
+        echo "deb http://deb.debian.org/debian bullseye non-free" | sudo tee -a /etc/apt/sources.list
+        echo "deb http://deb.debian.org/debian-security bullseye-security non-free" | sudo tee -a /etc/apt/sources.list
+        echo "deb http://deb.debian.org/debian bullseye-updates non-free" | sudo tee -a /etc/apt/sources.list
         apt-get update
-        apt-get install -y zip p7zip-full
+        apt-get install -y zip p7zip-rar
     - name: Checkout repo
       uses: actions/checkout@v1
     - name: Download assets
