@@ -1265,7 +1265,9 @@ static menuitem_t OP_Mouse2OptionsMenu[] =
 static menuitem_t OP_VideoOptionsMenu[] =
 {
 	{IT_STRING | IT_CALL,	NULL,	"Set Resolution...",	M_VideoModeMenu,		 10},
-#if ((defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON) || defined (HAVE_SDL)) && !defined(__SWITCH__)
+#ifdef __SWITCH__
+	{IT_STRING|IT_CVAR,     NULL,   "Auto Resolution",      &cv_autores,             20},
+#elif ((defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON) || defined (HAVE_SDL))
 	{IT_STRING|IT_CVAR,		NULL,	"Fullscreen",			&cv_fullscreen,			 20},
 #endif
 	{IT_STRING | IT_CVAR | IT_CV_SLIDER,

@@ -32,6 +32,9 @@
 
 #ifdef __SWITCH__
 #include <switch/services/applet.h>
+bool lastCanAutoPause = true;
+AppletOperationMode opMode = AppletOperationMode_Handheld;
+AppletOperationMode lastOpMode = AppletOperationMode_Handheld;
 #endif
 
 tic_t leveltime;
@@ -603,8 +606,24 @@ void P_Ticker(boolean run)
 	// This prevents people from essentially lag switching online matches and potentially fudging record attack times
 	// Also the way this is implemented is probably wicked inefficient (runs every tick) but it's the cleanest 
 	#ifdef __SWITCH__
-	if (P_CanAutoPause()) appletSetFocusHandlingMode(AppletFocusHandlingMode_SuspendHomeSleep);
-	else appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
+	if (lastCanAutoPause != P_CanAutoPause()) {
+		if (P_CanAutoPause()) appletSetFocusHandlingMode(AppletFocusHandlingMode_SuspendHomeSleep);
+		else appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
+		lastCanAutoPause = P_CanAutoPause();
+	}
+	
+	// Handle auto resolution (variable misnamed)
+	if (cv_autores.value) {
+		opMode = appletGetOperationMode();
+		if (lastOpMode != opMode && rendermode == render_opengl) {
+			if (opMode == AppletOperationMode_Handheld) {
+				setmodeneeded = VID_GetModeForSize(1280, 720)+1;
+			} else {
+				setmodeneeded = VID_GetModeForSize(1920, 1080)+1;
+			}
+			lastOpMode = opMode;
+		}
+	}
 	#endif
 
 	// Check for pause or menu up in single player

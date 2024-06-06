@@ -82,6 +82,10 @@ static void SCR_ChangeFullscreen (void);
 
 consvar_t cv_fullscreen = {"fullscreen", "Yes", CV_SAVE|CV_CALL, CV_YesNo, SCR_ChangeFullscreen, 0, NULL, NULL, 0, 0, NULL};
 
+#ifdef __SWITCH__
+consvar_t cv_autores = {"autores", "Yes", CV_SAVE, CV_YesNo, NULL, 0, NULL, NULL, 0, 0, NULL};
+#endif
+
 // =========================================================================
 //                           SCREEN VARIABLES
 // =========================================================================
