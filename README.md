@@ -24,9 +24,10 @@ Extract the contents of the update patch to the root of your SD card. Overwrite 
 - Full software keyboard support
 
 ## Notes
-- I've included a kartconfig.cfg that sets the resolution to 800x450 by default. It doesn't really do anything else so you can leave it out if you'd like.
-- The game takes a bit to boot. A faster SD card may help with this.
-- Without a config file, the game's default resolution is 320x200. I recommend setting it to 800x450 for the best balance of performance and visuals.
+- The game takes a bit to boot. A faster SD card or higher CPU clock may help with this.
+- OpenGL is used by default on this port. To switch to software either delete renderer.txt or write software in that file.
+- Automatic resolution runs at 720p on handheld and 1080p docked (OpenGL only). For software I recommend 800x450.
+- The game is CPU bottlenecked even on OpenGL. Models are an additional small performance loss.
 - The game continues to run while on the Switch's home screen when you are unable to pause to prevent lag-switching.
 - If you want to play the game with mouse/keyboard, you'll have to bind most of the buttons yourself.
 - All button bindings are set to match the Xbox controller layout (Xbox A -> Switch B, Xbox X -> Switch Y, etc.)
