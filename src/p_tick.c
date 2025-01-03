@@ -616,11 +616,7 @@ void P_Ticker(boolean run)
 	if (cv_autores.value) {
 		opMode = appletGetOperationMode();
 		if (lastOpMode != opMode && rendermode == render_opengl) {
-			if (opMode == AppletOperationMode_Handheld) {
-				setmodeneeded = VID_GetModeForSize(1280, 720)+1;
-			} else {
-				setmodeneeded = VID_GetModeForSize(1920, 1080)+1;
-			}
+			updateRes(opMode);
 			lastOpMode = opMode;
 		}
 	}

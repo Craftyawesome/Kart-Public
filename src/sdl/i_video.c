@@ -2185,4 +2185,14 @@ static void Impl_SetVsync(void)
 		SDL_RenderSetVSync(renderer, cv_vidwait.value);
 #endif
 }
+
+#ifdef __SWITCH__
+inline void updateRes(AppletOperationMode opMode) {
+	if (opMode == AppletOperationMode_Handheld) {
+		setmodeneeded = VID_GetModeForSize(1280, 720)+1;
+	} else {
+		setmodeneeded = VID_GetModeForSize(1920, 1080)+1;
+	}
+}
+#endif
 #endif
