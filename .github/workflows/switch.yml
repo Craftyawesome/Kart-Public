@@ -28,17 +28,17 @@ jobs:
     - name: make 
       run: make -C src/ SWITCH=1
     - name: Upload NRO
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: nro
         path: bin/Switch/Release/kartswitch.nro
     - name: Upload full zip
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: full
         path: bin/Switch/Release/kartswitch_*.full.zip
-    - name: Upload NRO update zip
-      uses: actions/upload-artifact@v2
-      with:
-        name: update_nro
-        path: bin/Switch/Release/kartswitch_*.update.nro.zip
+#    - name: Upload NRO update zip
+#      uses: actions/upload-artifact@v4
+#      with:
+#        name: update_nro
+#        path: bin/Switch/Release/kartswitch_*.update.nro.zip
