@@ -72,7 +72,12 @@ static boolean SV_SendFile(INT32 node, const char *filename, UINT8 fileid);
 
 #ifdef HAVE_CURL
 size_t curlwrite_data(void *ptr, size_t size, size_t nmemb, FILE *stream);
+#if defined(CURL_AT_LEAST_VERSION) && CURL_AT_LEAST_VERSION(7, 35, 0)
+int curlprogress_callbackx(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
+#define XFERINFOFUNCTION
+#else
 int curlprogress_callback(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow);
+#endif
 #endif
 
 // Sender structure
@@ -94,9 +99,19 @@ typedef struct filetran_s
 {
 	filetx_t *txlist; // Linked list of all files for the node
 	UINT32 position; // The current position in the file
-	FILE *currentfile; // The file currently being sent/received
+	boolean init; // false if we want to reset position / open a new file
 } filetran_t;
 static filetran_t transfer[MAXNETNODES];
+
+// The files currently being sent/received
+typedef struct fileused_s
+{
+	FILE *file;
+	UINT8 count;
+	UINT32 position;
+} fileused_t;
+
+static fileused_t transferFiles[UINT8_MAX + 1];
 
 // Read time of file: stat _stmtime
 // Write time of file: utime
@@ -479,7 +494,6 @@ INT32 CL_CheckFiles(void)
 {
 	INT32 i, j;
 	char wadfilename[MAX_WADPATH];
-	size_t packetsize = 0;
 	size_t filestoload = 0;
 	boolean downloadrequired = false;
 
@@ -550,8 +564,6 @@ INT32 CL_CheckFiles(void)
 				return 4;
 			}
 		}
-
-		packetsize += nameonlylength(fileneeded[i].filename) + 22;
 
 		fileneeded[i].status = findfile(fileneeded[i].filename, fileneeded[i].md5sum, true);
 		CONS_Debug(DBG_NETPLAY, "found %d\n", fileneeded[i].status);
@@ -760,8 +772,19 @@ static void SV_EndFileSend(INT32 node)
 		case SF_FILE: // It's a file, close it and free its filename
 			if (cv_noticedownload.value)
 				CONS_Printf("Ending file transfer (id %d) for node %d\n", p->fileid, node);
-			if (transfer[node].currentfile)
-				fclose(transfer[node].currentfile);
+			if (transferFiles[p->fileid].file)
+			{
+				if (transferFiles[p->fileid].count > 0)
+				{
+					transferFiles[p->fileid].count--;
+				}
+
+				if (transferFiles[p->fileid].count == 0)
+				{
+					fclose(transferFiles[p->fileid].file);
+					transferFiles[p->fileid].file = NULL;
+				}
+			}
 			free(p->id.filename);
 			break;
 		case SF_Z_RAM: // It's a memory block allocated with Z_Alloc or the likes, use Z_Free
@@ -778,7 +801,7 @@ static void SV_EndFileSend(INT32 node)
 	free(p);
 
 	// Indicate that the transmission is over
-	transfer[node].currentfile = NULL;
+	transfer[node].init = false;
 
 	filestosend--;
 }
@@ -842,21 +865,31 @@ void SV_FileSendTicker(void)
 		ram = f->ram;
 
 		// Open the file if it isn't open yet, or
-		if (!transfer[i].currentfile)
+		if (transfer[i].init == false)
 		{
 			if (!ram) // Sending a file
 			{
 				long filesize;
 
-				transfer[i].currentfile =
-					fopen(f->id.filename, "rb");
+				if (transferFiles[f->fileid].count == 0)
+				{
+					// It needs opened.
+					transferFiles[f->fileid].file =
+						fopen(f->id.filename, "rb");
 
-				if (!transfer[i].currentfile)
-					I_Error("File %s does not exist",
-						f->id.filename);
+					if (!transferFiles[f->fileid].file)
+					{
+						I_Error("Can't open file %s: %s",
+							f->id.filename, strerror(errno));
+					}
+				}
 
-				fseek(transfer[i].currentfile, 0, SEEK_END);
-				filesize = ftell(transfer[i].currentfile);
+				// Increment number of nodes using this file.
+				I_Assert(transferFiles[f->fileid].count < UINT8_MAX);
+				transferFiles[f->fileid].count++;
+
+				fseek(transferFiles[f->fileid].file, 0, SEEK_END);
+				filesize = ftell(transferFiles[f->fileid].file);
 
 				// Nobody wants to transfer a file bigger
 				// than 4GB!
@@ -865,23 +898,43 @@ void SV_FileSendTicker(void)
 				if (filesize == -1)
 					I_Error("Error getting filesize of %s", f->id.filename);
 
-				f->size = (UINT32)filesize;
-				fseek(transfer[i].currentfile, 0, SEEK_SET);
+				f->size = transferFiles[f->fileid].position = (UINT32)filesize;
 			}
-			else // Sending RAM
-				transfer[i].currentfile = (FILE *)1; // Set currentfile to a non-null value to indicate that it is open
+
 			transfer[i].position = 0;
+			transfer[i].init = true; // Indicate that it is open
+		}
+
+		if (!ram)
+		{
+			// Seek to the right position if we aren't already there.
+			if (transferFiles[f->fileid].position != transfer[i].position)
+			{
+				fseek(transferFiles[f->fileid].file, transfer[i].position, SEEK_SET);
+			}
 		}
 
 		// Build a packet containing a file fragment
 		p = &netbuffer->u.filetxpak;
 		size = software_MAXPACKETLENGTH - (FILETXHEADER + BASEPACKETSIZE);
-		if (f->size-transfer[i].position < size)
-			size = f->size-transfer[i].position;
+
+		if (f->size - transfer[i].position < size)
+		{
+			size = f->size - transfer[i].position;
+		}
+
 		if (ram)
+		{
 			M_Memcpy(p->data, &f->id.ram[transfer[i].position], size);
-		else if (fread(p->data, 1, size, transfer[i].currentfile) != size)
-			I_Error("SV_FileSendTicker: can't read %s byte on %s at %d because %s", sizeu1(size), f->id.filename, transfer[i].position, M_FileError(transfer[i].currentfile));
+		}
+		else if (fread(p->data, 1, size, transferFiles[f->fileid].file) != size)
+		{
+			I_Error("SV_FileSendTicker: can't read %s byte on %s at %d because %s",
+				sizeu1(size), f->id.filename, transfer[i].position, M_FileError(transferFiles[f->fileid].file));
+
+			transferFiles[f->fileid].position = (UINT32)(transferFiles[f->fileid].position + size);
+		}
+
 		p->position = LONG(transfer[i].position);
 		// Put flag so receiver knows the total size
 		if (transfer[i].position + size == f->size)
@@ -891,15 +944,18 @@ void SV_FileSendTicker(void)
 
 		// Send the packet
 		if (HSendPacket(i, true, 0, FILETXHEADER + size)) // Reliable SEND
-		{ // Success
+		{
+			// Success
 			transfer[i].position = (UINT32)(transfer[i].position + size);
+
 			if (transfer[i].position == f->size) // Finish?
+			{
 				SV_EndFileSend(i);
+			}
 		}
 		else
-		{ // Not sent for some odd reason, retry at next call
-			if (!ram)
-				fseek(transfer[i].currentfile,transfer[i].position, SEEK_SET);
+		{
+			// Not sent for some odd reason, retry at next call
 			// Exit the while (can't send this one so why should i send the next?)
 			break;
 		}
@@ -1166,6 +1222,18 @@ size_t curlwrite_data(void *ptr, size_t size, size_t nmemb, FILE *stream)
     return written;
 }
 
+#ifdef XFERINFOFUNCTION
+int curlprogress_callbackx(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
+{
+	(void)clientp;
+	(void)ultotal;
+	(void)ulnow; // Function prototype requires these but we won't use, so just discard
+	curl_dlnow = dlnow;
+	curl_dltotal = dltotal;
+	getbytes = curl_dlnow / (time(NULL) - curl_starttime); // To-do: Make this more accurate???
+	return 0;
+}
+#else
 int curlprogress_callback(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow)
 {
 	(void)clientp;
@@ -1176,6 +1244,7 @@ int curlprogress_callback(void *clientp, double dltotal, double dlnow, double ul
 	getbytes = curl_dlnow / (time(NULL) - curl_starttime); // To-do: Make this more accurate???
 	return 0;
 }
+#endif
 
 void CURLPrepareFile(const char* url, int dfilenum)
 {
@@ -1205,7 +1274,11 @@ void CURLPrepareFile(const char* url, int dfilenum)
 		curl_easy_setopt(http_handle, CURLOPT_URL, va("%s/%s", url, curl_realname));
 
 		// Only allow HTTP and HTTPS
+#if defined(CURL_AT_LEAST_VERSION) && CURL_AT_LEAST_VERSION(7, 85, 0)
+		curl_easy_setopt(http_handle, CURLOPT_PROTOCOLS_STR, "http,https");
+#else
 		curl_easy_setopt(http_handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
+#endif
 
 		curl_easy_setopt(http_handle, CURLOPT_USERAGENT, va("SRB2Kart/v%d.%d", VERSION, SUBVERSION)); // Set user agent as some servers won't accept invalid user agents.
 
@@ -1229,7 +1302,11 @@ void CURLPrepareFile(const char* url, int dfilenum)
 		curl_easy_setopt(http_handle, CURLOPT_WRITEDATA, curl_curfile->file);
 		curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION, curlwrite_data);
 		curl_easy_setopt(http_handle, CURLOPT_NOPROGRESS, 0L);
+#ifdef XFERINFOFUNCTION
+		curl_easy_setopt(http_handle, CURLOPT_XFERINFOFUNCTION, curlprogress_callbackx);
+#else
 		curl_easy_setopt(http_handle, CURLOPT_PROGRESSFUNCTION, curlprogress_callback);
+#endif
 
 		curl_curfile->status = FS_DOWNLOADING;
 		lastfilenum = dfilenum;
