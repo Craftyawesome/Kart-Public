@@ -446,34 +446,46 @@ boolean preparefilemenu(boolean samedepth, boolean replayhut)
 #else
 
 #ifdef __SWITCH__
+static const char *target_filename;
+static int scandir_filter(const struct dirent *entry) {
+    return ((entry->d_type == DT_REG && strcmp(entry->d_name, target_filename) == 0) ||
+			entry->d_type == DT_DIR);
+           
+}
 filestatus_t filesearch(char *filename, const char *startpath, const UINT8 *wantedmd5sum, boolean completepath, int maxsearchdepth) {
 	struct dirent **namelist;
-	int n = scandir(startpath, &namelist, NULL, alphasort);
+	target_filename = filename;
+	int n = scandir(startpath, &namelist, scandir_filter, alphasort);
 	if (n < 0) return FS_NOTFOUND;
 	char filepath[1024];
-	struct stat fsstat;
 	filestatus_t retval = FS_NOTFOUND;
 	// Check file in current dir
 	snprintf(filepath, sizeof(filepath), "%s/%s", startpath, filename);
-	if (stat(filepath, &fsstat) >= 0 && !S_ISDIR(fsstat.st_mode)) {
-		switch (checkfilemd5(filepath, wantedmd5sum)) {
-			case FS_FOUND:
-				if (completepath) strcpy(filename, filepath);
-				retval = FS_FOUND;
-				break;
-			case FS_MD5SUMBAD:
-				retval = FS_MD5SUMBAD;
-				break;
-			default: // prevent some compiler warnings
-				break;
+	for (int i = 0; i < n; i++) {
+		if (namelist[i]->d_type == DT_REG) {
+			if (strcmp(namelist[i]->d_name, filename) == 0) {
+				switch (checkfilemd5(filepath, wantedmd5sum)) {
+					case FS_FOUND:
+						if (completepath) strcpy(filename, filepath);
+						retval = FS_FOUND;
+						break;
+					case FS_MD5SUMBAD:
+						retval = FS_MD5SUMBAD;
+						break;
+					default: // prevent some compiler warnings
+						break;
+				}
+			}
 		}
 	}
 	// Only recurse if file not found and depth available
 	if (retval != FS_FOUND && maxsearchdepth > 0) {
 		for (int i = 0; i < n && retval != FS_FOUND; i++) {
 			if (namelist[i]->d_type == DT_DIR && 
-				strcmp(namelist[i]->d_name, ".") != 0 && 
-				strcmp(namelist[i]->d_name, "..") != 0) {
+				!(namelist[i]->d_name[0]=='.' &&
+					(namelist[i]->d_name[1]=='\0' ||
+						(namelist[i]->d_name[1]=='.' &&
+							namelist[i]->d_name[2]=='\0')))) {
 					
 				snprintf(filepath, sizeof(filepath), "%s/%s", startpath, namelist[i]->d_name);
 				retval = filesearch(filename, filepath, wantedmd5sum, completepath, maxsearchdepth - 1);
