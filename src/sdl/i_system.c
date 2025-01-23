@@ -3379,6 +3379,9 @@ void I_ShutdownSystem(void)
 	if (logstream)
 	{
 		I_OutputMsg("I_ShutdownSystem(): end of logstream.\n");
+#ifdef __SWITCH__
+		fflush(logstream);
+#endif
 		fclose(logstream);
 		logstream = NULL;
 	}
