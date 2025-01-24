@@ -33,8 +33,6 @@
 #ifdef __SWITCH__
 #include <switch/services/applet.h>
 bool lastCanAutoPause = true;
-AppletOperationMode opMode = AppletOperationMode_Handheld;
-AppletOperationMode lastOpMode = AppletOperationMode_Handheld;
 #endif
 
 tic_t leveltime;
@@ -612,14 +610,8 @@ void P_Ticker(boolean run)
 		lastCanAutoPause = P_CanAutoPause();
 	}
 	
-	// Handle auto resolution (variable misnamed)
-	if (cv_autores.value) {
-		opMode = appletGetOperationMode();
-		if (lastOpMode != opMode && rendermode == render_opengl) {
-			updateRes(opMode);
-			lastOpMode = opMode;
-		}
-	}
+	// Handle auto resolution
+	updateRes(0);
 	#endif
 
 	// Check for pause or menu up in single player

@@ -139,6 +139,6 @@ UINT32 I_GetRefreshRate(void);
 
 #ifdef __SWITCH__
 #include <switch.h>
-void updateRes(AppletOperationMode opMode);
+void updateRes(int assumeChange);
 #endif
 #endif

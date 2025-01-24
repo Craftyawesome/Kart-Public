@@ -83,7 +83,10 @@ static void SCR_ChangeFullscreen (void);
 consvar_t cv_fullscreen = {"fullscreen", "Yes", CV_SAVE|CV_CALL, CV_YesNo, SCR_ChangeFullscreen, 0, NULL, NULL, 0, 0, NULL};
 
 #ifdef __SWITCH__
-consvar_t cv_autores = {"autores", "Yes", CV_SAVE, CV_YesNo, NULL, 0, NULL, NULL, 0, 0, NULL};
+static void forceUpdateRes (void) {
+    updateRes(1);
+}
+consvar_t cv_autores = {"autores", "Yes", CV_SAVE|CV_CALL, CV_YesNo, forceUpdateRes, 0, NULL, NULL, 0, 0, NULL};
 #endif
 
 // =========================================================================
@@ -362,10 +365,8 @@ void SCR_CheckDefaultMode(void)
 	else
 	{
 		#ifdef __SWITCH__
-		if (cv_autores.value && rendermode == render_opengl) {
-			updateRes(appletGetOperationMode());
-			return;
-		}
+		updateRes(1);
+		return;
 		#endif
 		CONS_Printf(M_GetText("Default resolution: %d x %d (%d bits)\n"), cv_scr_width.value,
 			cv_scr_height.value, cv_scr_depth.value);

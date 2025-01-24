@@ -2187,11 +2187,18 @@ static void Impl_SetVsync(void)
 }
 
 #ifdef __SWITCH__
-inline void updateRes(AppletOperationMode opMode) {
-	if (opMode == AppletOperationMode_Handheld) {
-		setmodeneeded = VID_GetModeForSize(1280, 720)+1;
-	} else {
-		setmodeneeded = VID_GetModeForSize(1920, 1080)+1;
+inline void updateRes(int assumeChange) {
+	static AppletOperationMode lastOpMode = AppletOperationMode_Handheld;
+	if (cv_autores.value) {
+		AppletOperationMode opMode = appletGetOperationMode();
+		if ((assumeChange || lastOpMode != opMode) && rendermode == render_opengl) {
+			if (opMode == AppletOperationMode_Handheld) {
+				setmodeneeded = VID_GetModeForSize(1280, 720)+1;
+			} else {
+				setmodeneeded = VID_GetModeForSize(1920, 1080)+1;
+			}
+			lastOpMode = opMode;
+		}
 	}
 }
 #endif
