@@ -2194,9 +2194,9 @@ static void Impl_SetVsync(void)
 #ifdef __SWITCH__
 inline void updateRes(int assumeChange) {
 	static AppletOperationMode lastOpMode = AppletOperationMode_Handheld;
-	if (cv_autores.value) {
+	if (cv_autores.value && rendermode == render_opengl) {
 		AppletOperationMode opMode = appletGetOperationMode();
-		if ((assumeChange || lastOpMode != opMode) && rendermode == render_opengl) {
+		if ((assumeChange || lastOpMode != opMode)) {
 			if (opMode == AppletOperationMode_Handheld) {
 				setmodeneeded = VID_GetModeForSize(1280, 720)+1;
 			} else {

@@ -365,8 +365,10 @@ void SCR_CheckDefaultMode(void)
 	else
 	{
 		#ifdef __SWITCH__
-		updateRes(1);
-		return;
+		if (cv_autores.value && rendermode == render_opengl) {
+			updateRes(1);
+			return;
+		}
 		#endif
 		CONS_Printf(M_GetText("Default resolution: %d x %d (%d bits)\n"), cv_scr_width.value,
 			cv_scr_height.value, cv_scr_depth.value);
