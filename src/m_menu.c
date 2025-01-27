@@ -1262,6 +1262,20 @@ static menuitem_t OP_Mouse2OptionsMenu[] =
 	                      NULL, "Mouse Y Speed",    &cv_mouseysens2,      80},
 };*/
 
+static void toggleRenderer(INT32 choice) {
+	if (remove(va(pandf,srb2home,"renderer.txt"))) { // if fail to remove
+		FILE * file = fopen(va(pandf,srb2home,"renderer.txt"), "w");
+		if (file != NULL)
+		{
+			fputs("opengl\n", file);
+			fclose(file);
+			M_StartMessage("Next boot will use OpenGL.\nQuit now?\n\n(Press 'Y' to quit)", M_QuitResponse, MM_YESNO);
+		}
+	} else {
+		M_StartMessage("Next boot will use software.\nQuit now?\n\n(Press 'Y' to quit)", M_QuitResponse, MM_YESNO);
+	}
+}
+
 static menuitem_t OP_VideoOptionsMenu[] =
 {
 	{IT_STRING | IT_CALL,	NULL,	"Set Resolution...",	M_VideoModeMenu,		 10},
@@ -1286,6 +1300,7 @@ static menuitem_t OP_VideoOptionsMenu[] =
 
 #ifdef HWRENDER
 	{IT_SUBMENU|IT_STRING,	NULL,	"OpenGL Options...",	&OP_OpenGLOptionsDef,	130},
+	{IT_STRING | IT_CALL,	NULL,	"Toggle Renderer",		toggleRenderer,			140},
 #endif
 };
 

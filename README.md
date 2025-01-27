@@ -25,7 +25,7 @@ Extract the contents of the update patch to the root of your SD card. Overwrite 
 
 ## Notes
 - The game takes a bit to boot. A faster SD card or higher CPU clock may help with this.
-- OpenGL is used by default on this port. To switch to software either delete renderer.txt or write software in that file.
+- OpenGL is used by default on this port. To switch to software select "Toggle Renderer" in the video options. Alternatively, delete renderer.txt or write software in that file.
 - Automatic resolution runs at 720p on handheld and 1080p docked (OpenGL only). For software I recommend 800x450.
 - The game is CPU bottlenecked even on OpenGL. Models are an additional small performance loss.
 - The game continues to run while on the Switch's home screen when you are unable to pause to prevent lag-switching.
