@@ -3613,6 +3613,11 @@ void M_Init(void)
 		OP_VideoOptionsMenu[op_video_ogl].status = IT_DISABLED;
 #endif
 
+#ifdef __SWITCH__
+	if (rendermode == render_soft)
+		OP_VideoOptionsMenu[op_video_fullscreen].status = IT_DISABLED; //actually auto res
+#endif
+
 #ifndef NONET
 	CV_RegisterVar(&cv_serversort);
 #endif
@@ -10985,6 +10990,12 @@ static modedesc_t modedescs[MAXMODEDESCS];
 
 static void M_VideoModeMenu(INT32 choice)
 {
+	#ifdef __SWITCH__
+	if (cv_autores.value && rendermode == render_opengl) {
+		M_StartMessage("Turn off auto resolution to set a resolution.\n",NULL,MM_NOTHING);
+		return;
+	}
+	#endif
 	INT32 i, j, vdup, nummodes, width, height;
 	const char *desc;
 
