@@ -307,7 +307,7 @@ static keyname_t keynames[] =
 	{KEY_MOUSE1+0,"MOUSE1"},
 	{KEY_MOUSE1+1,"MOUSE2"},
 	{KEY_MOUSE1+2,"MOUSE3"},
-#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_MOUSE1+3,"MOUSE4"},
 	{KEY_MOUSE1+4,"MOUSE5"},
 	{KEY_MOUSE1+5,"MOUSE6"},
@@ -317,7 +317,7 @@ static keyname_t keynames[] =
 	{KEY_2MOUSE1+0,"SEC_MOUSE2"}, // BP: sorry my mouse handler swap button 1 and 2
 	{KEY_2MOUSE1+1,"SEC_MOUSE1"},
 	{KEY_2MOUSE1+2,"SEC_MOUSE3"},
-#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_2MOUSE1+3,"SEC_MOUSE4"},
 	{KEY_2MOUSE1+4,"SEC_MOUSE5"},
 	{KEY_2MOUSE1+5,"SEC_MOUSE6"},
@@ -440,6 +440,23 @@ static keyname_t keynames[] =
 	{KEY_JOY1+18, "JOYHPLUS_CC"},
 	{KEY_JOY1+19, "JOYMHOME_CC"},
 #define NOMOREJOYBTN_1S
+#elif defined (__SWITCH__)
+	{KEY_JOY1+0,  "JOYB"},
+	{KEY_JOY1+1,  "JOYA"},
+	{KEY_JOY1+2,  "JOYY"},
+	{KEY_JOY1+3,  "JOYX"},
+	{KEY_JOY1+4,  "JOYMINUS"},
+	{KEY_JOY1+5,  "J5"}, //?
+	{KEY_JOY1+6,  "JOYPLUS"},
+	{KEY_JOY1+7,  "JOYSTICKL"},
+	{KEY_JOY1+8,  "JOYSTICKR"},
+	{KEY_JOY1+9,  "JOYL"},
+	{KEY_JOY1+10, "JOYR"},
+	{KEY_HAT1+0,  "DPAD_UP"},
+	{KEY_HAT1+1,  "DPAD_DOWN"},
+	{KEY_HAT1+2,  "DPAD_LEFT"},
+	{KEY_HAT1+3,  "DPAD_RIGHT"},
+#define NOMOREJOYBTN_1S
 #else
 	{KEY_JOY1+0, "JOY1"},
 	{KEY_JOY1+1, "JOY2"},
@@ -482,7 +499,7 @@ static keyname_t keynames[] =
 	{KEY_HAT1+1, "HATDOWN"},
 	{KEY_HAT1+2, "HATLEFT"},
 	{KEY_HAT1+3, "HATRIGHT"},
-#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_HAT1+4, "HATUP2"},
 	{KEY_HAT1+5, "HATDOWN2"},
 	{KEY_HAT1+6, "HATLEFT2"},
@@ -502,7 +519,7 @@ static keyname_t keynames[] =
 	{KEY_DBLMOUSE1+0, "DBLMOUSE1"},
 	{KEY_DBLMOUSE1+1, "DBLMOUSE2"},
 	{KEY_DBLMOUSE1+2, "DBLMOUSE3"},
-#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_DBLMOUSE1+3, "DBLMOUSE4"},
 	{KEY_DBLMOUSE1+4, "DBLMOUSE5"},
 	{KEY_DBLMOUSE1+5, "DBLMOUSE6"},
@@ -512,7 +529,7 @@ static keyname_t keynames[] =
 	{KEY_DBL2MOUSE1+0, "DBLSEC_MOUSE2"}, // BP: sorry my mouse handler swap button 1 and 2
 	{KEY_DBL2MOUSE1+1, "DBLSEC_MOUSE1"},
 	{KEY_DBL2MOUSE1+2, "DBLSEC_MOUSE3"},
-#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_arch_dreamcast) && !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_DBL2MOUSE1+3, "DBLSEC_MOUSE4"},
 	{KEY_DBL2MOUSE1+4, "DBLSEC_MOUSE5"},
 	{KEY_DBL2MOUSE1+5, "DBLSEC_MOUSE6"},
@@ -631,6 +648,23 @@ static keyname_t keynames[] =
 	{KEY_DBLJOY1+18, "DBLJOYHPLUS_CC"},
 	{KEY_DBLJOY1+19, "DBLJOYMHOME_CC"},
 #define NOMOREJOYBTN_1DBL
+#elif defined (__SWITCH__)
+	{KEY_DBLJOY1+0,  "DBLJOYB"},
+	{KEY_DBLJOY1+1,  "DBLJOYA"},
+	{KEY_DBLJOY1+2,  "DBLJOYY"},
+	{KEY_DBLJOY1+3,  "DBLJOYX"},
+	{KEY_DBLJOY1+4,  "DBLJOYMINUS"},
+	{KEY_DBLJOY1+5,  "DBLJ5"}, //?
+	{KEY_DBLJOY1+6,  "DBLJOYPLUS"},
+	{KEY_DBLJOY1+7,  "DBLJOYSTICKL"},
+	{KEY_DBLJOY1+8,  "DBLJOYSTICKR"},
+	{KEY_DBLJOY1+9,  "DBLJOYL"},
+	{KEY_DBLJOY1+10, "DBLJOYR"},
+	{KEY_DBLHAT1+0,  "DBLDPAD_UP"},
+	{KEY_DBLHAT1+1,  "DBLDPAD_DOWN"},
+	{KEY_DBLHAT1+2,  "DBLDPAD_LEFT"},
+	{KEY_DBLHAT1+3,  "DBLDPAD_RIGHT"},
+#define NOMOREJOYBTN_1DBL
 #else
 	{KEY_DBLJOY1+0, "DBLJOY1"},
 	{KEY_DBLJOY1+1, "DBLJOY2"},
@@ -671,7 +705,7 @@ static keyname_t keynames[] =
 	{KEY_DBLHAT1+1, "DBLHATDOWN"},
 	{KEY_DBLHAT1+2, "DBLHATLEFT"},
 	{KEY_DBLHAT1+3, "DBLHATRIGHT"},
-#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_DBLHAT1+4, "DBLHATUP2"},
 	{KEY_DBLHAT1+5, "DBLHATDOWN2"},
 	{KEY_DBLHAT1+6, "DBLHATLEFT2"},
@@ -821,7 +855,7 @@ static keyname_t keynames[] =
 	{KEY_2HAT1+1,  "SEC_HATDOWN"},
 	{KEY_2HAT1+2,  "SEC_HATLEFT"},
 	{KEY_2HAT1+3,  "SEC_HATRIGHT"},
-#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_2HAT1+4, "SEC_HATUP2"},
 	{KEY_2HAT1+5, "SEC_HATDOWN2"},
 	{KEY_2HAT1+6, "SEC_HATLEFT2"},
@@ -969,7 +1003,7 @@ static keyname_t keynames[] =
 	{KEY_DBL2HAT1+1, "DBLSEC_HATDOWN"},
 	{KEY_DBL2HAT1+2, "DBLSEC_HATLEFT"},
 	{KEY_DBL2HAT1+3, "DBLSEC_HATRIGHT"},
-#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII)
+#if !defined (_XBOX) && !defined (_PSP) && !defined (_WII) && !defined (__SWITCH__)
 	{KEY_DBL2HAT1+4, "DBLSEC_HATUP2"},
 	{KEY_DBL2HAT1+5, "DBLSEC_HATDOWN2"},
 	{KEY_DBL2HAT1+6, "DBLSEC_HATLEFT2"},
@@ -1298,50 +1332,42 @@ void G_Controldefault(UINT8 player)
 	if (player == 0 || player == 1)
 	{
 		// Main controls
-		gamecontrol[gc_aimforward ][0] = KEY_UPARROW;
-		gamecontrol[gc_aimbackward][0] = KEY_DOWNARROW;
-		gamecontrol[gc_turnleft   ][0] = KEY_LEFTARROW;
-		gamecontrol[gc_turnright  ][0] = KEY_RIGHTARROW;
-		gamecontrol[gc_accelerate ][0] = 'a';
-		gamecontrol[gc_drift      ][0] = 's';
-		gamecontrol[gc_brake      ][0] = 'd';
-		gamecontrol[gc_fire       ][0] = KEY_SPACE;
-		gamecontrol[gc_lookback   ][0] = KEY_LSHIFT;
+		#ifdef __SWITCH__
+			gamecontrol[gc_accelerate ][0] = KEY_JOY1+0;  //B
+			gamecontrol[gc_lookback   ][0] = KEY_JOY1+2;  //Y
+			gamecontrol[gc_brake      ][0] = KEY_JOY1+1;  //A
+			gamecontrol[gc_fire       ][0] = KEY_JOY1+9;  //L
+			gamecontrol[gc_drift      ][0] = KEY_JOY1+10;  //R
 
-		gamecontrol[gc_accelerate ][1] = KEY_JOY1+0; // A
-		gamecontrol[gc_lookback   ][1] = KEY_JOY1+2; // X
-		gamecontrol[gc_brake      ][1] = KEY_JOY1+1; // B
-		gamecontrol[gc_fire       ][1] = KEY_JOY1+9; // LB
-		gamecontrol[gc_drift      ][1] = KEY_JOY1+10; // RB
+			gamecontrol[gc_pause      ][0] = KEY_JOY1+6; //Plus
+			gamecontrol[gc_systemmenu ][0] = KEY_JOY1+4; //Minus
+			gamecontrol[gc_viewpoint  ][0] = KEY_JOY1+3;  //X
+			gamecontrol[gc_scores     ][0] = KEY_HAT1+0; //UP
 
-		// Extra controls
-		gamecontrol[gc_pause      ][0] = KEY_PAUSE;
-		gamecontrol[gc_console    ][0] = KEY_CONSOLE;
-		gamecontrol[gc_screenshot ][0] = KEY_F8;
-		gamecontrol[gc_recordgif  ][0] = KEY_F9;
-		gamecontrol[gc_viewpoint  ][0] = KEY_F12;
-		gamecontrol[gc_talkkey    ][0] = 't';
-		//gamecontrol[gc_teamkey    ][0] = 'y';
-		gamecontrol[gc_scores     ][0] = KEY_TAB;
-		gamecontrol[gc_spectate   ][0] = '\'';
-		gamecontrol[gc_lookup     ][0] = KEY_PGUP;
-		gamecontrol[gc_lookdown   ][0] = KEY_PGDN;
-		gamecontrol[gc_centerview ][0] = KEY_END;
-		gamecontrol[gc_camreset   ][0] = KEY_HOME;
-		gamecontrol[gc_camtoggle  ][0] = KEY_BACKSPACE;
+			// gamecontrol[gc_talkkey   ][1] = KEY_JOY1+15; //DOWN
+		#else
+			gamecontrol[gc_aimforward ][0] = KEY_UPARROW;
+			gamecontrol[gc_aimbackward][0] = KEY_DOWNARROW;
+			gamecontrol[gc_turnleft   ][0] = KEY_LEFTARROW;
+			gamecontrol[gc_turnright  ][0] = KEY_RIGHTARROW;
+			gamecontrol[gc_accelerate ][0] = 'a';
+			gamecontrol[gc_drift      ][0] = 's';
+			gamecontrol[gc_brake      ][0] = 'd';
+			gamecontrol[gc_fire       ][0] = KEY_SPACE;
+			gamecontrol[gc_lookback   ][0] = KEY_LSHIFT;
 
-		gamecontrol[gc_viewpoint  ][1] = KEY_JOY1+3; // Y
-		gamecontrol[gc_pause      ][1] = KEY_JOY1+4; // Back
-		gamecontrol[gc_systemmenu ][0] = KEY_JOY1+6; // Start
-		//gamecontrol[gc_camtoggle  ][1] = KEY_HAT1+0; // D-Pad Up
-		//gamecontrol[gc_screenshot ][1] = KEY_HAT1+1; // D-Pad Down // absolutely fucking NOT
-		gamecontrol[gc_talkkey    ][1] = KEY_HAT1+1; // D-Pad Down
-		gamecontrol[gc_scores     ][1] = KEY_HAT1+0; // D-Pad Up
+			gamecontrol[gc_viewpoint  ][1] = KEY_JOY1+3; // Y
+			gamecontrol[gc_pause      ][1] = KEY_JOY1+4; // Back
+			gamecontrol[gc_systemmenu ][0] = KEY_JOY1+6; // Start
+			//gamecontrol[gc_camtoggle  ][1] = KEY_HAT1+0; // D-Pad Up
+			//gamecontrol[gc_screenshot ][1] = KEY_HAT1+1; // D-Pad Down // absolutely fucking NOT
+			gamecontrol[gc_talkkey    ][1] = KEY_HAT1+1; // D-Pad Down
+			gamecontrol[gc_scores     ][1] = KEY_HAT1+0; // D-Pad Up
+		#endif
 	}
 
 	if (player == 0 || player == 2)
 	{
-		// Player 2 controls
 		gamecontrolbis[gc_accelerate ][0] = KEY_2JOY1+0; // A
 		gamecontrolbis[gc_lookback   ][0] = KEY_2JOY1+2; // X
 		gamecontrolbis[gc_brake      ][0] = KEY_2JOY1+1; // B

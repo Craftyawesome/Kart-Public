@@ -1,0 +1,44 @@
+name: Nintendo Switch
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ switch-port ]
+  pull_request:
+    branches: [ switch-port ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64
+    steps:
+    - name: Install 7z/zip
+      run: |
+        echo "deb http://deb.debian.org/debian bullseye non-free" | sudo tee -a /etc/apt/sources.list
+        echo "deb http://deb.debian.org/debian-security bullseye-security non-free" | sudo tee -a /etc/apt/sources.list
+        echo "deb http://deb.debian.org/debian bullseye-updates non-free" | sudo tee -a /etc/apt/sources.list
+        apt-get update
+        apt-get install -y zip p7zip-rar
+    - name: Checkout repo
+      uses: actions/checkout@v1
+    - name: Download assets
+      run: sh ./downloadassets.sh
+    - name: make clean
+      run: make -C src/ SWITCH=1 clean
+    - name: make 
+      run: make -C src/ SWITCH=1
+    - name: Upload NRO
+      uses: actions/upload-artifact@v4
+      with:
+        name: nro
+        path: bin/Switch/Release/kartswitch.nro
+    - name: Upload full zip
+      uses: actions/upload-artifact@v4
+      with:
+        name: full
+        path: bin/Switch/Release/kartswitch_*.full.zip
+#    - name: Upload NRO update zip
+#      uses: actions/upload-artifact@v4
+#      with:
+#        name: update_nro
+#        path: bin/Switch/Release/kartswitch_*.update.nro.zip

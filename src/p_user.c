@@ -165,6 +165,15 @@ fixed_t P_ReturnThrustY(mobj_t *mo, angle_t angle, fixed_t move)
 }
 
 //
+// P_CanAutoPause
+// Returns true when gameplay is *allowed to be* halted even if the game isn't necessarily paused.
+//
+boolean P_CanAutoPause(void)
+{
+	return !(netgame || modeattacking);
+}
+
+//
 // P_AutoPause
 // Returns true when gameplay should be halted even if the game isn't necessarily paused.
 //

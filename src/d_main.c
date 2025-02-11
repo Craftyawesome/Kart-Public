@@ -35,6 +35,12 @@ int	snprintf(char *str, size_t n, const char *fmt, ...);
 #include <malloc.h>
 #endif
 
+#ifdef __SWITCH__
+#include <switch.h>
+#include "switch/swkbd.h"
+#endif
+
+
 #if !defined (UNDER_CE)
 #include <time.h>
 #elif defined (_XBOX)
@@ -666,6 +672,10 @@ void D_SRB2Loop(void)
 		V_DrawFixedPatch(0, 0, FRACUNIT/2, 0, (patch_t *)W_CacheLumpNum(W_GetNumForName("KARTKREW"), PU_CACHE), NULL);
 	I_FinishUpdate(); // page flip or blit buffer
 
+	#ifdef __SWITCH__
+	appletSetFocusHandlingMode(AppletFocusHandlingMode_SuspendHomeSleep);
+	#endif
+
 	for (;;)
 	{
 		// capbudget is the minimum precise_t duration of a single loop iteration
@@ -784,6 +794,15 @@ void D_SRB2Loop(void)
 
 #ifdef HAVE_BLUA
 		LUA_Step();
+#endif
+
+#ifdef __SWITCH__
+		Switch_Keyboard_Update();
+
+		if(!appletMainLoop()) {
+			I_Quit();
+			M_QuitResponse('y');
+		}
 #endif
 
 #ifdef HAVE_DISCORDRPC
@@ -1148,7 +1167,7 @@ void D_SRB2Main(void)
 
 		if (!userhome)
 		{
-#if ((defined (__unix__) && !defined (MSDOS)) || defined(__APPLE__) || defined (UNIXCOMMON)) && !defined (__CYGWIN__) && !defined (DC) && !defined (PSP) && !defined(GP2X)
+#if ((defined (__unix__) && !defined (MSDOS)) || defined(__APPLE__) || defined (UNIXCOMMON)) && !defined (__CYGWIN__) && !defined (DC) && !defined (PSP) && !defined(GP2X) && !defined(__SWITCH__)
 			I_Error("Please set $HOME to your home directory\n");
 #elif defined (_WIN32_WCE) && 0
 			if (dedicated)

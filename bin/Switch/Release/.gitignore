@@ -1,0 +1,9 @@
+srb2.nacp
+kartswitch.elf
+kartswitch.elf.debug
+kartswitch.elf.map
+kartswitch.nro
+kartswitch.zip 
+*.zip
+switch/
+renderer.txt

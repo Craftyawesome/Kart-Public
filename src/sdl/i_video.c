@@ -58,6 +58,10 @@
 #include "SDL_syswm.h"
 #endif
 
+#ifdef __SWITCH__
+#include "../switch/swkbd.h"
+#endif
+
 #include "../doomstat.h"
 #include "../i_system.h"
 #include "../v_video.h"
@@ -151,27 +155,51 @@ static SDL_bool      havefocus = SDL_TRUE;
 static const char *fallback_resolution_name = "Fallback";
 
 // windowed video modes from which to choose from.
-static INT32 windowedModes[MAXWINMODES][2] =
-{
-	{1920,1200}, // 1.60,6.00
-	{1920,1080}, // 1.66
-	{1680,1050}, // 1.60,5.25
-	{1600,1200}, // 1.33
-	{1600, 900}, // 1.66
-	{1366, 768}, // 1.66
-	{1440, 900}, // 1.60,4.50
-	{1280,1024}, // 1.33?
-	{1280, 960}, // 1.33,4.00
-	{1280, 800}, // 1.60,4.00
-	{1280, 720}, // 1.66
-	{1152, 864}, // 1.33,3.60
-	{1024, 768}, // 1.33,3.20
-	{ 800, 600}, // 1.33,2.50
-	{ 640, 480}, // 1.33,2.00
-	{ 640, 400}, // 1.60,2.00
-	{ 320, 240}, // 1.33,1.00
-	{ 320, 200}, // 1.60,1.00
-};
+#ifdef __SWITCH__
+	static INT32 windowedModes[MAXWINMODES][2] =
+	{
+		{1920,1080}, // 1.66
+		{1680, 945}, 
+		{1600, 900}, // 1.66
+		{1366, 768}, // 1.66
+		{1440, 810}, 
+		{1280, 720}, // 1.66
+		{1152, 864}, // 1.33,3.60
+		{1152, 648},
+		{1024, 768}, // 1.33,3.20
+		{1024, 576}, 
+		{ 800, 600}, // 1.33,2.50
+		{ 800, 450}, 
+		{ 640, 480}, // 1.33,2.00
+		{ 640, 400}, // 1.60,2.00
+		{ 640, 360},
+		{ 320, 240}, // 1.33,1.00
+		{ 320, 200}, // 1.60,1.00
+		{ 320, 180},
+	};
+#else
+	static INT32 windowedModes[MAXWINMODES][2] =
+	{
+		{1920,1200}, // 1.60,6.00
+		{1920,1080}, // 1.66
+		{1680,1050}, // 1.60,5.25
+		{1600,1200}, // 1.33
+		{1600, 900}, // 1.66
+		{1366, 768}, // 1.66
+		{1440, 900}, // 1.60,4.50
+		{1280,1024}, // 1.33?
+		{1280, 960}, // 1.33,4.00
+		{1280, 800}, // 1.60,4.00
+		{1280, 720}, // 1.66
+		{1152, 864}, // 1.33,3.60
+		{1024, 768}, // 1.33,3.20
+		{ 800, 600}, // 1.33,2.50
+		{ 640, 480}, // 1.33,2.00
+		{ 640, 400}, // 1.60,2.00
+		{ 320, 240}, // 1.33,1.00
+		{ 320, 200}, // 1.60,1.00
+	};
+#endif
 
 static void Impl_VideoSetupSDLBuffer(void);
 static void Impl_VideoSetupBuffer(void);
@@ -207,11 +235,16 @@ static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen)
 				SDL_SetWindowFullscreen(window, 0);
 			}
 			// Reposition window only in windowed mode
-			SDL_SetWindowSize(window, width, height);
-			SDL_SetWindowPosition(window,
-				SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetWindowDisplayIndex(window)),
-				SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetWindowDisplayIndex(window))
-			);
+			#ifdef __SWITCH__
+				SDL_SetWindowSize(window, 1920, 1080);
+  				SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+			#else
+				SDL_SetWindowSize(window, width, height);
+				SDL_SetWindowPosition(window,
+					SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetWindowDisplayIndex(window)),
+					SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetWindowDisplayIndex(window))
+				);
+			#endif
 		}
 	}
 	else
@@ -1320,6 +1353,11 @@ void I_StartupMouse(void)
 //
 void I_OsPolling(void)
 {
+	#ifdef __SWITCH__
+		// Disable input if software keyboard is up
+		if (switch_kbdstate == SwkbdState_Shown)
+			return;
+	#endif
 	SDL_Keymod mod;
 
 	if (consolevent)
@@ -1745,6 +1783,11 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 #ifdef HWRENDER
 	if (rendermode == render_opengl)
 		flags |= SDL_WINDOW_OPENGL;
+
+	// Without a 24-bit depth buffer many visuals are ruined by z-fighting.
+	// Some GPU drivers may give us a 16-bit depth buffer since the
+	// default value for SDL_GL_DEPTH_SIZE is 16.
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 #endif
 
 	// Create a window
@@ -1761,6 +1804,9 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 #ifdef HWRENDER
 	if (rendermode == render_opengl)
 	{
+		#ifdef __SWITCH__
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+		#endif
 		sdlglcontext = SDL_GL_CreateContext(window);
 		if (sdlglcontext == NULL)
 		{
@@ -1785,6 +1831,10 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 		// to not write RPT files. Every other driver
 		// seems fine.
 		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+
+		#ifdef __SWITCH__
+			flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
+		#endif
 
 		renderer = SDL_CreateRenderer(window, -1, flags);
 		if (renderer == NULL)
@@ -2140,4 +2190,21 @@ static void Impl_SetVsync(void)
 		SDL_RenderSetVSync(renderer, cv_vidwait.value);
 #endif
 }
+
+#ifdef __SWITCH__
+inline void updateRes(int assumeChange) {
+	static AppletOperationMode lastOpMode = AppletOperationMode_Handheld;
+	if (cv_autores.value && rendermode == render_opengl) {
+		AppletOperationMode opMode = appletGetOperationMode();
+		if ((assumeChange || lastOpMode != opMode)) {
+			if (opMode == AppletOperationMode_Handheld) {
+				setmodeneeded = VID_GetModeForSize(1280, 720)+1;
+			} else {
+				setmodeneeded = VID_GetModeForSize(1920, 1080)+1;
+			}
+			lastOpMode = opMode;
+		}
+	}
+}
+#endif
 #endif

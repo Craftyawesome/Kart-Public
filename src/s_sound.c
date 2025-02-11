@@ -38,6 +38,8 @@ extern INT32 msg_id;
 #include "p_local.h" // camera info
 #include "m_misc.h" // for tunes command
 
+const char *compat_special_music_slots[16];
+
 #ifdef HAVE_BLUA
 #include "lua_hook.h" // MusicChange hook
 #endif
@@ -84,6 +86,8 @@ consvar_t cv_samplerate = {"samplerate", "11025", 0, CV_Unsigned, NULL, 11025, N
 consvar_t cv_samplerate = {"samplerate", "44100", 0, CV_Unsigned, NULL, 44100, NULL, NULL, 0, 0, NULL}; //Alam: For easy hacking?
 #elif defined(_WII)
 consvar_t cv_samplerate = {"samplerate", "32000", 0, CV_Unsigned, NULL, 32000, NULL, NULL, 0, 0, NULL}; //Alam: For easy hacking?
+#elif defined(__SWITCH__)
+consvar_t cv_samplerate = {"samplerate", "48000", 0, CV_Unsigned, NULL, 48000, NULL, NULL, 0, 0, NULL}; //Alam: For easy hacking?
 #else
 consvar_t cv_samplerate = {"samplerate", "22050", 0, CV_Unsigned, NULL, 22050, NULL, NULL, 0, 0, NULL}; //Alam: For easy hacking?
 #endif

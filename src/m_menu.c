@@ -83,6 +83,10 @@ int	snprintf(char *str, size_t n, const char *fmt, ...);
 //int	vsnprintf(char *str, size_t n, const char *fmt, va_list ap);
 #endif
 
+#ifdef __SWITCH__
+#include "switch/swkbd.h"
+#endif
+
 #ifdef HAVE_DISCORDRPC
 //#include "discord_rpc.h"
 #include "discord.h"
@@ -1258,10 +1262,26 @@ static menuitem_t OP_Mouse2OptionsMenu[] =
 	                      NULL, "Mouse Y Speed",    &cv_mouseysens2,      80},
 };*/
 
+static void toggleRenderer(INT32 choice) {
+	if (remove(va(pandf,srb2home,"renderer.txt"))) { // if fail to remove
+		FILE * file = fopen(va(pandf,srb2home,"renderer.txt"), "w");
+		if (file != NULL)
+		{
+			fputs("opengl\n", file);
+			fclose(file);
+			M_StartMessage("Next boot will use OpenGL.\nQuit now?\n\n(Press 'Y' to quit)", M_QuitResponse, MM_YESNO);
+		}
+	} else {
+		M_StartMessage("Next boot will use software.\nQuit now?\n\n(Press 'Y' to quit)", M_QuitResponse, MM_YESNO);
+	}
+}
+
 static menuitem_t OP_VideoOptionsMenu[] =
 {
 	{IT_STRING | IT_CALL,	NULL,	"Set Resolution...",	M_VideoModeMenu,		 10},
-#if (defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON) || defined (HAVE_SDL)
+#ifdef __SWITCH__
+	{IT_STRING|IT_CVAR,     NULL,   "Auto Resolution",      &cv_autores,             20},
+#elif ((defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON) || defined (HAVE_SDL))
 	{IT_STRING|IT_CVAR,		NULL,	"Fullscreen",			&cv_fullscreen,			 20},
 #endif
 	{IT_STRING | IT_CVAR | IT_CV_SLIDER,
@@ -1280,6 +1300,7 @@ static menuitem_t OP_VideoOptionsMenu[] =
 
 #ifdef HWRENDER
 	{IT_SUBMENU|IT_STRING,	NULL,	"OpenGL Options...",	&OP_OpenGLOptionsDef,	130},
+	{IT_STRING | IT_CALL,	NULL,	"Toggle Renderer",		toggleRenderer,			140},
 #endif
 };
 
@@ -2516,6 +2537,19 @@ static void Command_Manual_f(void)
 	itemOn = 0;
 }
 
+#ifdef __SWITCH__
+
+void M_Responder_Switch_SwkbdChanged(const char* str, SwkbdChangedStringArg* arg) {
+	CV_Set(currentMenu->menuitems[itemOn].itemaction, str);
+}
+
+void M_Responder_Switch_SwkbdMovedCursor(const char* str, SwkbdMovedCursorArg* arg) {
+	char *currentStr = ((consvar_t *)currentMenu->menuitems[itemOn].itemaction)->string;
+	swkbdInlineSetCursorPos(&switch_kbdinline, strlen(currentStr)); // Place swkbd cursor at string end
+}
+
+#endif
+
 //
 // M_Responder
 //
@@ -2571,6 +2605,15 @@ boolean M_Responder(event_t *ev)
 			case KEY_HAT1 + 3:
 				ch = KEY_RIGHTARROW;
 				break;
+			#ifdef __SWITCH__
+				// FIXME
+				//case KEY_JOY1 + 1: // A
+					//ch = KEY_ENTER;
+					//break;
+				case KEY_JOY1 + 4: // Minus
+					ch = KEY_ESCAPE;
+					break;
+			#endif
 		}
 	}
 	else if (menuactive)
@@ -2932,6 +2975,23 @@ boolean M_Responder(event_t *ev)
 			noFurtherInput = true;
 			currentMenu->lastOn = itemOn;
 
+			#ifdef __SWITCH__
+			if ((currentMenu->menuitems[itemOn].status & IT_CVARTYPE) == IT_CV_STRING) {
+				char *currentStr = ((consvar_t *)currentMenu->menuitems[itemOn].itemaction)->string;
+				swkbdInlineSetChangedStringCallback(&switch_kbdinline, M_Responder_Switch_SwkbdChanged);
+				swkbdInlineSetMovedCursorCallback(&switch_kbdinline, M_Responder_Switch_SwkbdMovedCursor);
+				swkbdInlineSetDecidedEnterCallback(&switch_kbdinline, NULL); // No submit action
+				swkbdInlineSetInputText(
+					&switch_kbdinline,
+					currentStr // Current value of cvar
+				);
+				swkbdInlineSetCursorPos(&switch_kbdinline, strlen(currentStr)); // Place swkbd cursor at string end
+				swkbdInlineSetKeytopTranslate(&switch_kbdinline, 0, 0); // Place kb in default location
+				Switch_Keyboard_Open();
+				break;
+			}
+			#endif
+			
 			if (currentMenu == &PlaybackMenuDef)
 			{
 				boolean held = (boolean)playback_enterheld;
@@ -2943,8 +3003,8 @@ boolean M_Responder(event_t *ev)
 			if (routine)
 			{
 				if (((currentMenu->menuitems[itemOn].status & IT_TYPE)==IT_CALL
-				 || (currentMenu->menuitems[itemOn].status & IT_TYPE)==IT_SUBMENU)
-                 && (currentMenu->menuitems[itemOn].status & IT_CALLTYPE))
+					|| (currentMenu->menuitems[itemOn].status & IT_TYPE)==IT_SUBMENU)
+					&& (currentMenu->menuitems[itemOn].status & IT_CALLTYPE))
 				{
 					if (((currentMenu->menuitems[itemOn].status & IT_CALLTYPE) & IT_CALL_NOTMODIFIED) && majormods)
 					{
@@ -3551,6 +3611,11 @@ void M_Init(void)
 	// Permanently hide some options based on render mode
 	if (rendermode == render_soft)
 		OP_VideoOptionsMenu[op_video_ogl].status = IT_DISABLED;
+#endif
+
+#ifdef __SWITCH__
+	if (rendermode == render_soft)
+		OP_VideoOptionsMenu[op_video_fullscreen].status = IT_DISABLED; //actually auto res
 #endif
 
 #ifndef NONET
@@ -4937,7 +5002,7 @@ static void M_AddonsClearName(INT32 choice)
 {
 	if (!majormods || prevmajormods)
 	{
-		CLEARNAME;
+		if (refreshdirname) { CLEARNAME; } // BRACES ARE REQUIRED BECAUSE OF MACRO FUCKERY
 	}
 	M_StopMessage(choice);
 }
@@ -4948,10 +5013,7 @@ static boolean M_AddonsRefresh(void)
 	if ((refreshdirmenu & REFRESHDIR_NORMAL) && !preparefilemenu(true, false))
 	{
 		UNEXIST;
-		if (refreshdirname)
-		{
-			CLEARNAME;
-		}
+		if (refreshdirname) { CLEARNAME; } // BRACES ARE REQUIRED BECAUSE OF MACRO FUCKERY
 		return true;
 	}
 
@@ -4989,7 +5051,7 @@ static boolean M_AddonsRefresh(void)
 		}
 
 		S_StartSound(NULL, sfx_s221);
-		CLEARNAME;
+		if (refreshdirname) { CLEARNAME; } // BRACES ARE REQUIRED BECAUSE OF MACRO FUCKERY
 	}
 
 	return false;
@@ -9305,7 +9367,7 @@ static void M_StartServerMenu(INT32 choice)
 // ==============
 // CONNECT VIA IP
 // ==============
-
+ 
 static char setupm_ip[28];
 #endif
 static UINT8 setupm_pselect = 1;
@@ -9512,6 +9574,24 @@ static void M_ConnectIP(INT32 choice)
 		I_FinishUpdate(); // page flip or blit buffer
 }
 
+#ifdef __SWITCH__
+
+void M_HandleConnectIP_Switch_SwkbdChanged(const char* str, SwkbdChangedStringArg* arg) {
+	SDL_strlcpy(setupm_ip, str, sizeof(setupm_ip));
+}
+
+void M_HandleConnectIP_Switch_SwkbdDecidedEnter(const char* str, SwkbdDecidedEnterArg* arg) {
+	S_StartSound(NULL,sfx_menu1); // Tails
+	currentMenu->lastOn = itemOn;
+	M_ConnectIP(1);
+}
+
+void M_HandleConnectIP_Switch_SwkbdMovedCursor(const char* str, SwkbdMovedCursorArg* arg) {
+	swkbdInlineSetCursorPos(&switch_kbdinline, strlen(setupm_ip)); // Place swkbd cursor at string end
+}
+
+#endif
+
 // Tails 11-19-2002
 static void M_HandleConnectIP(INT32 choice)
 {
@@ -9531,6 +9611,20 @@ static void M_HandleConnectIP(INT32 choice)
 			break;
 
 		case KEY_ENTER:
+			#ifdef __SWITCH__
+			swkbdInlineSetChangedStringCallback(&switch_kbdinline, M_HandleConnectIP_Switch_SwkbdChanged);
+			swkbdInlineSetMovedCursorCallback(&switch_kbdinline, M_HandleConnectIP_Switch_SwkbdMovedCursor); // No cursor movement
+			swkbdInlineSetDecidedEnterCallback(&switch_kbdinline, M_HandleConnectIP_Switch_SwkbdDecidedEnter);
+			swkbdInlineSetInputText(
+				&switch_kbdinline,
+				setupm_ip // Current value of cvar
+			);
+			swkbdInlineSetCursorPos(&switch_kbdinline, strlen(setupm_ip)); // Place swkbd cursor at string end
+			swkbdInlineSetKeytopTranslate(&switch_kbdinline, 0, 0.445); // Place kb in default location
+			Switch_Keyboard_Open();
+			break;
+			#endif
+
 			S_StartSound(NULL,sfx_menu1); // Tails
 			currentMenu->lastOn = itemOn;
 			M_ConnectIP(1);
@@ -9558,7 +9652,7 @@ static void M_HandleConnectIP(INT32 choice)
 
 		default:
 			l = strlen(setupm_ip);
-			if (l >= 28-1)
+			if (l >= sizeof(setupm_ip)-1)
 				break;
 
 			// Rudimentary number and period enforcing - also allows letters so hostnames can be used instead
@@ -9831,6 +9925,14 @@ static void M_DrawSetupMultiPlayerMenu(void)
 #undef charw
 }
 
+#ifdef __SWITCH__
+
+void M_HandleSetupMultiPlayer_Switch_SwkbdChanged(const char* str, SwkbdChangedStringArg* arg) {
+	SDL_strlcpy(setupm_name, str, sizeof(setupm_name));
+}
+
+#endif
+
 // Handle 1P/2P MP Setup
 static void M_HandleSetupMultiPlayer(INT32 choice)
 {
@@ -9909,6 +10011,21 @@ static void M_HandleSetupMultiPlayer(INT32 choice)
 				setupm_name[0] = 0;
 			}
 			break;
+
+		#ifdef __SWITCH__
+		case KEY_ENTER:
+			swkbdInlineSetChangedStringCallback(&switch_kbdinline, M_HandleSetupMultiPlayer_Switch_SwkbdChanged);
+			swkbdInlineSetMovedCursorCallback(&switch_kbdinline, NULL); // No cursor movement
+			swkbdInlineSetDecidedEnterCallback(&switch_kbdinline, NULL);
+			swkbdInlineSetInputText(
+				&switch_kbdinline,
+				setupm_name // Current value of cvar
+			);
+			swkbdInlineSetCursorPos(&switch_kbdinline, strlen(setupm_name)); // Place swkbd cursor at string end
+			swkbdInlineSetKeytopTranslate(&switch_kbdinline, 0, 0); // Place kb in default location
+			Switch_Keyboard_Open();
+			break;
+		#endif
 
 		default:
 			if (choice < 32 || choice > 127 || itemOn != 0)
@@ -10873,6 +10990,12 @@ static modedesc_t modedescs[MAXMODEDESCS];
 
 static void M_VideoModeMenu(INT32 choice)
 {
+	#ifdef __SWITCH__
+	if (cv_autores.value && rendermode == render_opengl) {
+		M_StartMessage("Turn off auto resolution to set a resolution.\n",NULL,MM_NOTHING);
+		return;
+	}
+	#endif
 	INT32 i, j, vdup, nummodes, width, height;
 	const char *desc;
 

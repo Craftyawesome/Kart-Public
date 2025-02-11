@@ -21,6 +21,7 @@
 #     Compile the SDL/Solaris version with 'make SOLARIS=1'
 #     Compile the SDL/FreeBSD version with 'gmake FREEBSD=1'
 #     Compile the SDL/Cygwin version with 'make CYGWIN32=1'
+#     Compile the SDL/Switch version with 'make SWITCH=1'
 #     Compile the SDL/other version try with 'make SDL=1'
 #
 # 'Targets':
@@ -96,6 +97,8 @@ ALL_SYSTEMS=\
 	MACOSX\
 	SDL\
 
+ifndef SWITCH # i dont fucking care anymore
+
 # check for user specified system
 ifeq (,$(filter $(ALL_SYSTEMS),$(.VARIABLES)))
 ifeq ($(OS),Windows_NT) # all windows are Windows_NT...
@@ -132,6 +135,7 @@ else # if you on the *nix
 endif
 endif
 
+endif
 
 # SRB2 data files
 D_DIR?=../bin/Resources
@@ -147,6 +151,20 @@ D_FILES=$(D_DIR)/srb2.srb \
 	$(D_DIR)/music.kart \
 
 PKG_CONFIG?=pkg-config
+
+ifdef ENABLE_NXLINK
+	CPPFLAGS+=-DENABLE_NXLINK
+endif
+
+ifdef SWITCH
+SDL=1
+NOOBJDUMP=1
+NOASM=1
+NONX86=1
+NOGME=1
+OBJS+=$(OBJDIR)/switch/swkbd.o
+STATIC=1
+endif
 
 ifdef WIILINUX
 LINUX=1
@@ -865,6 +883,8 @@ $(OBJDIR)/z_zone.o: z_zone.c
 endif
 
 $(OBJDIR)/comptime.o: comptime.c pre-build
+	@echo "HERE"
+	@echo $(OBJS)
 	$(CC) $(CFLAGS) $(WFLAGS) -c $< -o $@
 
 $(BIN)/%.mo: locale/%.po

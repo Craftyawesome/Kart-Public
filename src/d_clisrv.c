@@ -2582,6 +2582,11 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 		// Only ESC and non-keyboard keys abort connection
 		if (!modeattacking && (key == KEY_ESCAPE || key >= KEY_MOUSE1 || cl_mode == CL_ABORTED))
 		{
+			#ifdef __SWITCH__
+				// Since Plus is the accept button for the Switch software keyboard, accepting will immediately cancel the connection.
+				// Therefore, ignore this specific button.
+				if (key == KEY_JOY1+10) return false;
+			#endif
 			CONS_Printf(M_GetText("Network game synchronization aborted.\n"));
 			D_QuitNetGame();
 			CL_Reset();

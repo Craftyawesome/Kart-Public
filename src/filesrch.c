@@ -445,6 +445,48 @@ boolean preparefilemenu(boolean samedepth, boolean replayhut)
 
 #else
 
+#ifdef __SWITCH__
+static int scandir_filter(const struct dirent *entry) {
+    return (entry->d_type == DT_DIR &&
+			!(entry->d_name[0]=='.' &&
+				(entry->d_name[1]=='\0' ||
+					(entry->d_name[1]=='.' &&
+						entry->d_name[2]=='\0'))));
+           
+}
+filestatus_t filesearch(char *filename, const char *startpath, const UINT8 *wantedmd5sum, boolean completepath, int maxsearchdepth) {
+	struct dirent **namelist;
+	char filepath[1024];
+	struct stat fsstat;
+	filestatus_t retval = FS_NOTFOUND;
+	// Check file in current dir
+	snprintf(filepath, sizeof(filepath), "%s/%s", startpath, filename);
+	if (stat(filepath, &fsstat) >= 0 && !S_ISDIR(fsstat.st_mode)) {
+		switch (checkfilemd5(filepath, wantedmd5sum)) {
+			case FS_FOUND:
+				if (completepath) strcpy(filename, filepath);
+				retval = FS_FOUND;
+				break;
+			case FS_MD5SUMBAD:
+				retval = FS_MD5SUMBAD;
+				break;
+			default: // prevent some compiler warnings
+				break;
+		}
+	}
+	// Only recurse if file not found and depth available
+	if (retval != FS_FOUND && maxsearchdepth > 0) {
+		int n = scandir(startpath, &namelist, scandir_filter, alphasort);
+		for (int i = 0; i < n && retval != FS_FOUND; i++) {
+			snprintf(filepath, sizeof(filepath), "%s/%s", startpath, namelist[i]->d_name);
+			retval = filesearch(filename, filepath, wantedmd5sum, completepath, maxsearchdepth - 1);
+			free(namelist[i]);
+		}
+		free(namelist);
+	}
+	return retval;
+}
+#else
 filestatus_t filesearch(char *filename, const char *startpath, const UINT8 *wantedmd5sum, boolean completepath, int maxsearchdepth)
 {
 	filestatus_t retval = FS_NOTFOUND;
@@ -549,6 +591,7 @@ filestatus_t filesearch(char *filename, const char *startpath, const UINT8 *want
 
 	return retval;
 }
+#endif
 
 char exttable[NUM_EXT_TABLE][7] = { // maximum extension length (currently 4) plus 3 (null terminator, stop, and length including previous two)
 	"\5.txt", "\5.cfg", // exec
@@ -750,7 +793,7 @@ boolean preparefilemenu(boolean samedepth, boolean replayhut)
 					(dent->d_name[1]=='.' &&
 						dent->d_name[2]=='\0')))
 			continue; // we don't want to scan uptree
-
+	
 		strcpy(&menupath[menupathindex[menudepthleft]],dent->d_name);
 
 		if (stat(menupath,&fsstat) < 0) // do we want to follow symlinks? if not: change it to lstat
@@ -804,7 +847,14 @@ boolean preparefilemenu(boolean samedepth, boolean replayhut)
 		I_Error("preparefilemenu(): could not reallocate coredirmenu.");
 	}
 
-	rewinddir(dirhandle);
+	// heyjoeway: rewinddir causes issues on Nintendo Switch
+	// This code >>should<< be equivalent, if a bit less efficient
+	closedir(dirhandle);
+	if (!(dirhandle = opendir(menupath))) // get directory
+	{
+		closefilemenu(true);
+		return false;
+	}
 
 	while ((pos+folderpos) < sizecoredirmenu)
 	{
@@ -906,7 +956,7 @@ boolean preparefilemenu(boolean samedepth, boolean replayhut)
 	if ((menudepthleft != menudepth-1) // now for UP... entry
 		&& !(coredirmenu[0] = Z_StrDup(va("%c\5UP...", EXT_UP))))
 			I_Error("preparefilemenu(): could not create \"UP...\".");
-
+		
 	menupath[menupathindex[menudepthleft]] = 0;
 	sizecoredirmenu = (numfolders+pos); // just in case things shrink between opening and rewind
 
