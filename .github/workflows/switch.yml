@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: devkitpro/devkita64
+    container: devkitpro/devkita64:20250728
     steps:
     - name: Install 7z/zip
       run: |
@@ -17,6 +17,8 @@ jobs:
         echo "deb http://deb.debian.org/debian bullseye-updates non-free" | sudo tee -a /etc/apt/sources.list
         apt-get update
         apt-get install -y zip p7zip-rar
+        dkp-pacman -Sy
+        dkp-pacman -S libnx --noconfirm
     - name: Checkout repo
       uses: actions/checkout@v1
     - name: Download assets
